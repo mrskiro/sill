@@ -1,0 +1,59 @@
+import Foundation
+import GRDB
+
+extension NoteStore {
+    public func peers() throws -> [Peer] {
+        try writer.read { db in
+            try Row.fetchAll(db, sql: "SELECT id, name, cert_fingerprint, paired_at, last_sync_at FROM peer ORDER BY paired_at").map(Self.peer)
+        }
+    }
+
+    public func peer(fingerprint: Data) throws -> Peer? {
+        try writer.read { db in
+            try Row.fetchOne(db, sql: "SELECT id, name, cert_fingerprint, paired_at, last_sync_at FROM peer WHERE cert_fingerprint = ?", arguments: [fingerprint]).map(Self.peer)
+        }
+    }
+
+    public func peer(id: DeviceID) throws -> Peer? {
+        try writer.read { db in
+            try Row.fetchOne(db, sql: "SELECT id, name, cert_fingerprint, paired_at, last_sync_at FROM peer WHERE id = ?", arguments: [id.uuidString]).map(Self.peer)
+        }
+    }
+
+    /// Adds or refreshes a trusted device (pairing, or a renamed peer saying hello).
+    public func addPeer(id: DeviceID, name: String, fingerprint: Data, now: Date = Date()) throws {
+        try writer.write { db in
+            try db.execute(
+                sql: """
+                    INSERT INTO peer(id, name, cert_fingerprint, paired_at) VALUES (?, ?, ?, ?)
+                    ON CONFLICT(id) DO UPDATE SET name = excluded.name, cert_fingerprint = excluded.cert_fingerprint
+                    """,
+                arguments: [id.uuidString, name, fingerprint, now.timeIntervalSince1970]
+            )
+        }
+    }
+
+    public func removePeer(id: DeviceID) throws {
+        try writer.write { db in
+            try db.execute(sql: "DELETE FROM peer WHERE id = ?", arguments: [id.uuidString])
+        }
+    }
+
+    public func markSynced(peerID: DeviceID, now: Date = Date()) throws {
+        try writer.write { db in
+            try db.execute(sql: "UPDATE peer SET last_sync_at = ? WHERE id = ?", arguments: [now.timeIntervalSince1970, peerID.uuidString])
+        }
+    }
+
+    private static func peer(_ row: Row) throws -> Peer {
+        guard let id = UUID(uuidString: row["id"]) else { throw StoreError.corruptRow("peer \(row["id"] as String)") }
+        let lastSync: Double? = row["last_sync_at"]
+        return Peer(
+            id: id,
+            name: row["name"],
+            fingerprint: row["cert_fingerprint"],
+            pairedAt: Date(timeIntervalSince1970: row["paired_at"]),
+            lastSyncAt: lastSync.map(Date.init(timeIntervalSince1970:))
+        )
+    }
+}

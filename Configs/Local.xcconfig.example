@@ -1,0 +1,3 @@
+// Copy to Configs/Local.xcconfig (gitignored) and set your team.
+// Used by the iOS target for automatic signing on a real device.
+DEVELOPMENT_TEAM = YOURTEAMID

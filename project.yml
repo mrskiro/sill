@@ -1,0 +1,158 @@
+name: Sill
+options:
+  bundleIdPrefix: com.mrskiro
+  xcodeVersion: "26.0"
+  deploymentTarget:
+    macOS: "26.0"
+    iOS: "26.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+configFiles:
+  Debug: Configs/Local.xcconfig
+  Release: Configs/Local.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_UPCOMING_FEATURE_EXISTENTIAL_ANY: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  SillCore:
+    path: Packages/SillCore
+  KeyboardShortcuts:
+    url: https://github.com/sindresorhus/KeyboardShortcuts
+    from: 3.0.1
+targets:
+  Sill:
+    type: application
+    platform: macOS
+    sources:
+      - path: Apps/Mac
+        type: syncedFolder
+    dependencies:
+      - package: SillCore
+      - package: KeyboardShortcuts
+    settings:
+      base:
+        PRODUCT_NAME: Sill
+        PRODUCT_BUNDLE_IDENTIFIER: com.mrskiro.sill
+        # Team signing (DEVELOPMENT_TEAM comes from Configs/Local.xcconfig): the device identity
+        # lives in the data-protection keychain, which needs an application-identifier entitlement.
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_HARDENED_RUNTIME: YES
+    entitlements:
+      path: Apps/Mac/Sill.entitlements
+      properties:
+        com.apple.security.app-sandbox: true
+        com.apple.security.network.client: true
+        com.apple.security.network.server: true
+        # Keychain Sharing makes Xcode embed a provisioning profile, which grants the
+        # application-identifier the data-protection keychain requires (device identity).
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.mrskiro.sill
+    info:
+      path: Apps/Mac/Info.plist
+      properties:
+        CFBundleDisplayName: Sill
+        LSApplicationCategoryType: public.app-category.productivity
+        NSLocalNetworkUsageDescription: Sill syncs your notes directly with your paired iPhone over the local network.
+        NSBonjourServices:
+          - _sill._tcp
+        NSHumanReadableCopyright: ""
+        CFBundleURLTypes:
+          - CFBundleURLName: com.mrskiro.sill
+            CFBundleURLSchemes:
+              - sill
+  SillMacTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: Tests/Mac
+        type: syncedFolder
+      - path: Tests/Shared
+        type: syncedFolder
+    dependencies:
+      - target: Sill
+      - package: KeyboardShortcuts
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        CODE_SIGN_STYLE: Automatic
+  SillPhone:
+    type: application
+    platform: iOS
+    sources:
+      - path: Apps/iOS
+        type: syncedFolder
+    dependencies:
+      - package: SillCore
+    settings:
+      base:
+        PRODUCT_NAME: Sill
+        PRODUCT_BUNDLE_IDENTIFIER: com.mrskiro.sill
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        SUPPORTS_MACCATALYST: NO
+    entitlements:
+      path: Apps/iOS/Sill.entitlements
+      properties:
+        # Device identity lives in the keychain; the access group gives the simulator an application-identifier too.
+        keychain-access-groups:
+          - $(AppIdentifierPrefix)com.mrskiro.sill
+    info:
+      path: Apps/iOS/Info.plist
+      properties:
+        CFBundleDisplayName: Sill
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        ITSAppUsesNonExemptEncryption: false
+        NSLocalNetworkUsageDescription: Sill syncs your notes directly with your paired Mac over the local network.
+        NSBonjourServices:
+          - _sill._tcp
+        NSCameraUsageDescription: Sill uses the camera only to scan the pairing QR code shown on your Mac.
+  SillPhoneTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/iOS
+        type: syncedFolder
+      - path: Tests/Shared
+        type: syncedFolder
+    dependencies:
+      - target: SillPhone
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        # The host app's product is Sill.app, not SillPhone.app.
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/Sill.app/Sill
+        BUNDLE_LOADER: $(TEST_HOST)
+schemes:
+  Sill:
+    build:
+      targets:
+        Sill: all
+        SillMacTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SillMacTests
+      environmentVariables:
+        SILL_TEST_MODE: "1"
+  SillPhone:
+    build:
+      targets:
+        SillPhone: all
+        SillPhoneTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - SillPhoneTests
+      environmentVariables:
+        SILL_TEST_MODE: "1"
