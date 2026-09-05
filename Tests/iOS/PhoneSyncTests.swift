@@ -2,6 +2,7 @@ import Network
 import SillCore
 import Testing
 import UIKit
+
 @testable import Sill
 
 /// Nested so it runs serially with the capture tests (they share the app).
@@ -31,7 +32,9 @@ extension PhoneFlowTests {
             let server = SyncServer(store: macStore)
             let (ports, portSink) = AsyncStream<UInt16>.makeStream()
             let listenerTask = Task {
-                try await SillListener(identity: macIdentity, server: server, advertise: false).run { portSink.yield($0) }
+                try await SillListener(identity: macIdentity, server: server, advertise: false).run {
+                    portSink.yield($0)
+                }
             }
             var portIterator = ports.makeAsyncIterator()
             let port = try #require(await portIterator.next())
@@ -39,7 +42,8 @@ extension PhoneFlowTests {
 
             let macNote = try macStore.createNote(content: "# From the Mac")
             let token = await server.beginPairing()
-            let payload = PairingPayload(deviceID: macStore.deviceID, name: "Test Mac", fingerprint: macIdentity.fingerprint, token: token)
+            let payload = PairingPayload(
+                deviceID: macStore.deviceID, name: "Test Mac", fingerprint: macIdentity.fingerprint, token: token)
             sync.pair(with: payload)
 
             try await waitUntil { sync.status == .connected("Test Mac") }
@@ -58,7 +62,9 @@ extension PhoneFlowTests {
             // Mac edits → poke → phone list.
             try macStore.updateNote(id: macNote.id, content: "# From the Mac, edited")
             await server.poke()
-            try await waitUntil { self.model.notes.contains { $0.id == macNote.id && $0.content == "# From the Mac, edited" } }
+            try await waitUntil {
+                self.model.notes.contains { $0.id == macNote.id && $0.content == "# From the Mac, edited" }
+            }
             try await waitUntil { sync.lastSyncAt != nil }
 
             // Background: the session ends; foreground: it comes back.

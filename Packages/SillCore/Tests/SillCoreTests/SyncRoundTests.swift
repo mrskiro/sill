@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import SillCore
 
 @Suite struct SyncRoundTests {
@@ -7,12 +8,13 @@ import Testing
     func at(_ seconds: Double) -> Date { t0.addingTimeInterval(seconds) }
 
     @Test func createEditDeleteFlowBothWays() throws {
-        let mac = try Replica("Mac"), phone = try Replica("iPhone")
+        let mac = try Replica("Mac")
+        let phone = try Replica("iPhone")
 
         let note = try mac.store.createNote(content: "from mac", now: at(0))
         try SyncRound.run(client: phone, server: mac)
         #expect(try phone.store.note(id: note.id)?.content == "from mac")
-        #expect(try phone.store.note(id: note.id)?.version == note.version) // adopted as-is
+        #expect(try phone.store.note(id: note.id)?.version == note.version)  // adopted as-is
 
         try phone.store.updateNote(id: note.id, content: "edited on phone", now: at(10))
         try SyncRound.run(client: phone, server: mac)
@@ -26,7 +28,8 @@ import Testing
     }
 
     @Test func roundIsIdempotentAndQuietWhenNothingChanged() throws {
-        let mac = try Replica("Mac"), phone = try Replica("iPhone")
+        let mac = try Replica("Mac")
+        let phone = try Replica("iPhone")
         try mac.store.createNote(content: "a", now: at(0))
         try phone.store.createNote(content: "b", now: at(1))
         try SyncRound.run(client: phone, server: mac)
@@ -39,7 +42,8 @@ import Testing
     }
 
     @Test func concurrentEditsKeepBothTextsAndConverge() throws {
-        let mac = try Replica("Mac"), phone = try Replica("iPhone")
+        let mac = try Replica("Mac")
+        let phone = try Replica("iPhone")
         let note = try mac.store.createNote(content: "# Meeting\n- a", now: at(0))
         try SyncRound.run(client: phone, server: mac)
 
@@ -49,11 +53,11 @@ import Testing
 
         #expect(results.server.conflicts == 1)
         #expect(results.server.conflictCopies == 1)
-        #expect(results.client.conflicts == 0) // the client only adopts the server's resolution
+        #expect(results.client.conflicts == 0)  // the client only adopts the server's resolution
 
         let macLive = try mac.liveContents()
         #expect(macLive == (try phone.liveContents()))
-        #expect(macLive[note.id] == "# Meeting\n- a\n- phone line") // newer edit stays in place
+        #expect(macLive[note.id] == "# Meeting\n- a\n- phone line")  // newer edit stays in place
         let copy = macLive.values.first { $0.hasPrefix("# Meeting (Conflict from Mac)") }
         #expect(copy == "# Meeting (Conflict from Mac)\n- a\n- mac line")
         #expect(macLive.count == 2)
@@ -64,7 +68,8 @@ import Testing
     }
 
     @Test func editWinsOverConcurrentDelete() throws {
-        let mac = try Replica("Mac"), phone = try Replica("iPhone")
+        let mac = try Replica("Mac")
+        let phone = try Replica("iPhone")
         let note = try mac.store.createNote(content: "draft", now: at(0))
         try SyncRound.run(client: phone, server: mac)
 
@@ -78,7 +83,8 @@ import Testing
     }
 
     @Test func sameTextOnBothSidesIsNotAConflict() throws {
-        let mac = try Replica("Mac"), phone = try Replica("iPhone")
+        let mac = try Replica("Mac")
+        let phone = try Replica("iPhone")
         let note = try mac.store.createNote(content: "x", now: at(0))
         try SyncRound.run(client: phone, server: mac)
         try mac.store.updateNote(id: note.id, content: "same", now: at(1))
@@ -91,7 +97,8 @@ import Testing
     }
 
     @Test func typingDuringTheRoundStillConvergesWithoutDuplicates() throws {
-        let mac = try Replica("Mac"), phone = try Replica("iPhone")
+        let mac = try Replica("Mac")
+        let phone = try Replica("iPhone")
         let note = try mac.store.createNote(content: "base", now: at(0))
         try SyncRound.run(client: phone, server: mac)
         try mac.store.updateNote(id: note.id, content: "mac edit", now: at(10))
@@ -99,7 +106,8 @@ import Testing
 
         // Phase 1: client → server (server resolves: phone edit wins, mac edit copied).
         let toServer = try phone.store.changes(since: try mac.store.vector())
-        try mac.store.apply(toServer, senderID: phone.id, senderName: phone.name, senderVector: try phone.store.vector())
+        try mac.store.apply(
+            toServer, senderID: phone.id, senderName: phone.name, senderVector: try phone.store.vector())
         // The user keeps typing on the phone before phase 2 arrives.
         try phone.store.updateNote(id: note.id, content: "phone edit, more", now: at(12))
         // Phase 2: server → client.
@@ -115,13 +123,15 @@ import Testing
     }
 
     @Test func changesTravelThroughAHubToAThirdDevice() throws {
-        let mac = try Replica("Mac"), phone = try Replica("iPhone"), pad = try Replica("iPad")
+        let mac = try Replica("Mac")
+        let phone = try Replica("iPhone")
+        let pad = try Replica("iPad")
         let fromPhone = try phone.store.createNote(content: "phone note", now: at(0))
         try SyncRound.run(client: phone, server: mac)
         try SyncRound.run(client: pad, server: mac)
 
         #expect(try pad.store.note(id: fromPhone.id)?.content == "phone note")
-        #expect(try pad.store.note(id: fromPhone.id)?.version.device == phone.id) // origin preserved
+        #expect(try pad.store.note(id: fromPhone.id)?.version.device == phone.id)  // origin preserved
 
         try pad.store.updateNote(id: fromPhone.id, content: "edited on pad", now: at(5))
         try SyncRound.run(client: pad, server: mac)

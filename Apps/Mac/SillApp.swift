@@ -1,5 +1,5 @@
-import KeyboardShortcuts
 import SillCore
+import SillMac
 import SwiftUI
 
 @main
@@ -26,10 +26,13 @@ struct SillApp: App {
                     .keyboardShortcut("s", modifiers: [.command, .option])
             }
             CommandMenu("Note") {
-                Toggle("Pin Window", isOn: Binding(
-                    get: { appDelegate.panelState.isPinned },
-                    set: { appDelegate.setPinned($0) }
-                ))
+                Toggle(
+                    "Pin Window",
+                    isOn: Binding(
+                        get: { appDelegate.panelState.isPinned },
+                        set: { appDelegate.setPinned($0) }
+                    )
+                )
                 .keyboardShortcut("p", modifiers: [.command, .shift])
                 Divider()
                 Button("Delete Note") { appDelegate.deleteCurrentNote() }

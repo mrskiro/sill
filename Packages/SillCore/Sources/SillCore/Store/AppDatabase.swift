@@ -36,40 +36,49 @@ public struct AppDatabase: Sendable {
     static var migrator: DatabaseMigrator {
         var migrator = DatabaseMigrator()
         #if DEBUG
-        migrator.eraseDatabaseOnSchemaChange = true
+            migrator.eraseDatabaseOnSchemaChange = true
         #endif
         migrator.registerMigration("v1") { db in
-            try db.execute(sql: """
-                CREATE TABLE note (
-                    id            TEXT PRIMARY KEY NOT NULL,
-                    content       TEXT NOT NULL,
-                    created_at    REAL NOT NULL,
-                    updated_at    REAL NOT NULL,
-                    deleted_at    REAL,
-                    origin_device TEXT NOT NULL,
-                    origin_seq    INTEGER NOT NULL
-                );
-                CREATE INDEX note_origin ON note(origin_device, origin_seq);
-                CREATE INDEX note_updated ON note(updated_at);
+            try db.execute(
+                sql: """
+                    CREATE TABLE note (
+                        id            TEXT PRIMARY KEY NOT NULL,
+                        content       TEXT NOT NULL,
+                        created_at    REAL NOT NULL,
+                        updated_at    REAL NOT NULL,
+                        deleted_at    REAL,
+                        origin_device TEXT NOT NULL,
+                        origin_seq    INTEGER NOT NULL
+                    );
+                    CREATE INDEX note_origin ON note(origin_device, origin_seq);
+                    CREATE INDEX note_updated ON note(updated_at);
 
-                CREATE TABLE device (
-                    id   TEXT PRIMARY KEY NOT NULL,
-                    name TEXT NOT NULL
-                );
+                    CREATE TABLE device (
+                        id   TEXT PRIMARY KEY NOT NULL,
+                        name TEXT NOT NULL
+                    );
 
-                CREATE TABLE seen (
-                    device_id TEXT PRIMARY KEY NOT NULL,
-                    max_seq   INTEGER NOT NULL
-                );
+                    CREATE TABLE seen (
+                        device_id TEXT PRIMARY KEY NOT NULL,
+                        max_seq   INTEGER NOT NULL
+                    );
 
-                CREATE TABLE peer (
-                    id               TEXT PRIMARY KEY NOT NULL,
-                    name             TEXT NOT NULL,
-                    cert_fingerprint BLOB NOT NULL,
-                    paired_at        REAL NOT NULL,
-                    last_sync_at     REAL
-                );
-                """)
+                    CREATE TABLE peer (
+                        id               TEXT PRIMARY KEY NOT NULL,
+                        name             TEXT NOT NULL,
+                        cert_fingerprint BLOB NOT NULL,
+                        paired_at        REAL NOT NULL,
+                        last_sync_at     REAL
+                    );
+                    """)
+        }
+        // A (device, seq) pair is a version and must never repeat; make the database enforce it.
+        migrator.registerMigration("v2-unique-version") { db in
+            try db.execute(
+                sql: """
+                    DROP INDEX IF EXISTS note_origin;
+                    CREATE UNIQUE INDEX note_origin ON note(origin_device, origin_seq);
+                    """)
         }
         return migrator
     }

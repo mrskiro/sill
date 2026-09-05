@@ -26,12 +26,13 @@ public enum MarkdownEditing {
     public static func insertNewline(in text: String, selection: NSRange) -> TextEdit? {
         guard selection.length == 0, let line = ListLine(text: text, at: selection.location) else { return nil }
         let caretInLine = selection.location - line.range.location
-        guard caretInLine >= line.markerEnd else { return nil } // caret inside the marker: default newline
+        guard caretInLine >= line.markerEnd else { return nil }  // caret inside the marker: default newline
 
         if line.isEmptyItem {
             // "- " + Return → plain empty line.
             let removed = NSRange(location: line.range.location, length: line.markerEnd)
-            return TextEdit(range: removed, replacement: "", selection: NSRange(location: line.range.location, length: 0))
+            return TextEdit(
+                range: removed, replacement: "", selection: NSRange(location: line.range.location, length: 0))
         }
         let replacement = "\n" + line.indent + line.nextMarker
         let caret = selection.location + (replacement as NSString).length
@@ -48,11 +49,15 @@ public enum MarkdownEditing {
 
     /// Shift+Tab on a list line: align with the nearest shallower list item, or column 0.
     public static func outdent(in text: String, selection: NSRange) -> TextEdit? {
-        guard selection.length == 0, let line = ListLine(text: text, at: selection.location), line.indentWidth > 0 else { return nil }
+        guard selection.length == 0, let line = ListLine(text: text, at: selection.location), line.indentWidth > 0
+        else { return nil }
         var target = 0
         var cursor = line
         while let previous = previousListLine(before: cursor, in: text) {
-            if previous.indentWidth < line.indentWidth { target = previous.indentWidth; break }
+            if previous.indentWidth < line.indentWidth {
+                target = previous.indentWidth
+                break
+            }
             cursor = previous
         }
         return replaceIndent(of: line, with: String(repeating: " ", count: target), selection: selection)
@@ -76,7 +81,9 @@ public enum MarkdownEditing {
             case .none:
                 let insertAt = markerStart + line.bulletWidth
                 let shifted = caret >= insertAt ? caret + 4 : caret
-                return TextEdit(range: NSRange(location: insertAt, length: 0), replacement: "[ ] ", selection: NSRange(location: shifted, length: selection.length))
+                return TextEdit(
+                    range: NSRange(location: insertAt, length: 0), replacement: "[ ] ",
+                    selection: NSRange(location: shifted, length: selection.length))
             }
         }
         // Plain line: prefix it (after any leading whitespace) with "- [ ] ".
@@ -84,7 +91,9 @@ public enum MarkdownEditing {
         let leading = lineText.prefix(while: { $0 == " " || $0 == "\t" })
         let insertAt = lineRange.location + (String(leading) as NSString).length
         let shifted = caret >= insertAt ? caret + 6 : caret
-        return TextEdit(range: NSRange(location: insertAt, length: 0), replacement: "- [ ] ", selection: NSRange(location: shifted, length: selection.length))
+        return TextEdit(
+            range: NSRange(location: insertAt, length: 0), replacement: "- [ ] ",
+            selection: NSRange(location: shifted, length: selection.length))
     }
 
     // MARK: - Internals
@@ -106,9 +115,9 @@ public enum MarkdownEditing {
 struct ListLine {
     enum Checkbox { case none, unchecked, checked }
 
-    let range: NSRange          // full line range excluding the newline
+    let range: NSRange  // full line range excluding the newline
     let indent: String
-    let bullet: String          // "- ", "* ", "+ ", or "3. "
+    let bullet: String  // "- ", "* ", "+ ", or "3. "
     let checkbox: Checkbox
     let content: String
 

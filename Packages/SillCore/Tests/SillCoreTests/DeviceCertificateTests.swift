@@ -2,6 +2,7 @@ import CryptoKit
 import Foundation
 import Testing
 import X509
+
 @testable import SillCore
 
 @Suite struct DeviceCertificateTests {

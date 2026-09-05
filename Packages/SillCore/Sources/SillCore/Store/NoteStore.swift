@@ -65,12 +65,21 @@ public final class NoteStore: Sendable {
     /// Every note (including tombstones) whose version the remote replica has not seen.
     /// Scans all rows; fine for the volume of a scratchpad.
     public func changes(since remote: VersionVector) throws -> [Note] {
+        try changesSnapshot(since: remote).notes
+    }
+
+    /// The outbound batch together with the vector *as of the same snapshot*. A round must send
+    /// exactly this pair: a vector read later could include a write whose row was never sent,
+    /// and the receiver would then believe it had seen that row forever.
+    public func changesSnapshot(since remote: VersionVector) throws -> (notes: [Note], vector: VersionVector) {
         try writer.read { db in
-            try NoteRecord
+            let notes =
+                try NoteRecord
                 .order(sql: "origin_device, origin_seq")
                 .fetchAll(db)
                 .map { try $0.toNote() }
                 .filter { !remote.contains($0.version) }
+            return (notes, try Self.fetchVector(db))
         }
     }
 
@@ -122,7 +131,61 @@ public final class NoteStore: Sendable {
         }
     }
 
+    // MARK: - Editor saves
+
+    public struct SaveResult: Equatable, Sendable {
+        public var note: Note
+        /// The remote version that was open underneath the editor, preserved as its own note.
+        public var copiedAside: Note?
+    }
+
+    /// Saves editor text on top of the version the editor loaded. If sync replaced the note in
+    /// between (the editor's observation may not have arrived yet), the replaced text is copied
+    /// aside first, so no device's writing is silently overwritten. One transaction.
+    @discardableResult
+    public func saveEdit(id: UUID, text: String, expecting version: Version, now: Date = Date()) throws -> SaveResult? {
+        try writer.write { db in
+            guard var note = try NoteRecord.fetchOne(db, key: id.uuidString)?.toNote() else { return nil }
+            var copied: Note?
+            if note.version != version, !note.isDeleted, note.content != text,
+                !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
+                let name = try self.deviceName(db, for: note.version.device)
+                copied = Note(
+                    id: SyncResolution.conflictCopyID(noteID: note.id, loserVersion: note.version),
+                    content: NoteTitle.markingConflict(in: note.content, from: name),
+                    createdAt: note.createdAt,
+                    updatedAt: note.updatedAt,
+                    version: try self.nextVersion(db)
+                )
+                if try NoteRecord.fetchOne(db, key: copied!.id.uuidString) == nil {
+                    try NoteRecord(copied!).insert(db)
+                } else {
+                    copied = nil
+                }
+            }
+            if note.content == text, !note.isDeleted {
+                return SaveResult(note: note, copiedAside: copied)
+            }
+            note.content = text
+            note.updatedAt = now
+            note.deletedAt = nil
+            note.version = try self.nextVersion(db)
+            try NoteRecord(note).update(db)
+            return SaveResult(note: note, copiedAside: copied)
+        }
+    }
+
     // MARK: - Internals
+
+    /// Display name for a device: ours, a paired peer's, or a short id.
+    func deviceName(_ db: Database, for device: DeviceID) throws -> String {
+        if device == deviceID { return deviceName }
+        if let row = try Row.fetchOne(db, sql: "SELECT name FROM peer WHERE id = ?", arguments: [device.uuidString]) {
+            return row["name"]
+        }
+        return String(device.uuidString.prefix(8))
+    }
 
     /// Allocates the next local version and records it in the vector, inside the caller's transaction.
     func nextVersion(_ db: Database) throws -> Version {
@@ -143,7 +206,9 @@ public final class NoteStore: Sendable {
     static func fetchVector(_ db: Database) throws -> VersionVector {
         var vector = VersionVector()
         for row in try SeenRecord.fetchAll(db) {
-            guard let device = UUID(uuidString: row.deviceId) else { throw StoreError.corruptRow("seen \(row.deviceId)") }
+            guard let device = UUID(uuidString: row.deviceId) else {
+                throw StoreError.corruptRow("seen \(row.deviceId)")
+            }
             vector.record(Version(device: device, seq: row.maxSeq))
         }
         return vector

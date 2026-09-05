@@ -1,6 +1,6 @@
 PROJECT = Sill.xcodeproj
 
-.PHONY: gen build build-mac build-ios test test-core test-mac test-ios hygiene device-check clean
+.PHONY: gen build build-mac build-ios test test-core test-mac test-ios hygiene format lint device-check clean
 
 gen:
 	@test -f Configs/Local.xcconfig || cp Configs/Local.xcconfig.example Configs/Local.xcconfig
@@ -28,6 +28,14 @@ test-ios: gen
 
 hygiene:
 	scripts/hygiene-check.sh
+
+SWIFT_SOURCES = Apps Packages/SillCore/Sources Packages/SillCore/Tests Tests
+
+format:
+	xcrun swift-format format --in-place --recursive $(SWIFT_SOURCES)
+
+lint:
+	xcrun swift-format lint --recursive --strict $(SWIFT_SOURCES)
 
 device-check: build-mac
 	scripts/device-sync-check.sh $(DEVICE)

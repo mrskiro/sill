@@ -78,10 +78,11 @@ struct MarkdownTextView: UIViewRepresentable {
 final class MarkdownUITextView: UITextView {
     override func insertText(_ text: String) {
         guard text == "\n", markedTextRange == nil,
-              let edit = MarkdownEditing.insertNewline(in: self.text, selection: selectedRange),
-              let start = position(from: beginningOfDocument, offset: edit.range.location),
-              let end = position(from: start, offset: edit.range.length),
-              let textRange = self.textRange(from: start, to: end) else {
+            let edit = MarkdownEditing.insertNewline(in: self.text, selection: selectedRange),
+            let start = position(from: beginningOfDocument, offset: edit.range.location),
+            let end = position(from: start, offset: edit.range.length),
+            let textRange = self.textRange(from: start, to: end)
+        else {
             super.insertText(text)
             return
         }

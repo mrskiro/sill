@@ -22,9 +22,12 @@ struct PairingView: View {
                     HStack {
                         VStack(alignment: .leading) {
                             Text(peer.name)
-                            Text(peer.lastSyncAt.map { "Synced \($0.formatted(.relative(presentation: .named)))" } ?? "Never synced")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
+                            Text(
+                                peer.lastSyncAt.map { "Synced \($0.formatted(.relative(presentation: .named)))" }
+                                    ?? "Never synced"
+                            )
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                         }
                         Spacer()
                         Button("Unpair") { sync.unpair(peer.id) }

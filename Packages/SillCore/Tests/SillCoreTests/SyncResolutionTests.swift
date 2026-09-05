@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import SillCore
 
 @Suite struct SyncResolutionTests {
@@ -8,24 +9,41 @@ import Testing
     let t0 = Date(timeIntervalSince1970: 1_700_000_000)
 
     private func note(_ content: String, by device: UUID, seq: Int64, at: Date? = nil, deleted: Bool = false) -> Note {
-        Note(id: UUID(uuidString: "11111111-0000-0000-0000-000000000000")!, content: content,
-             createdAt: t0, updatedAt: at ?? t0, deletedAt: deleted ? (at ?? t0) : nil,
-             version: Version(device: device, seq: seq))
+        Note(
+            id: UUID(uuidString: "11111111-0000-0000-0000-000000000000")!, content: content,
+            createdAt: t0, updatedAt: at ?? t0, deletedAt: deleted ? (at ?? t0) : nil,
+            version: Version(device: device, seq: seq))
     }
 
     @Test func decideFollowsTheVectorRules() {
         let mine = note("x", by: a, seq: 3)
         let theirs = note("y", by: b, seq: 5)
 
-        #expect(SyncResolution.decide(incoming: theirs, local: nil, senderVector: VersionVector(), localVector: VersionVector()) == .insert)
-        #expect(SyncResolution.decide(incoming: theirs, local: nil, senderVector: VersionVector(), localVector: VersionVector([b: 5])) == .keep)
-        #expect(SyncResolution.decide(incoming: mine, local: mine, senderVector: VersionVector(), localVector: VersionVector()) == .keep)
+        #expect(
+            SyncResolution.decide(
+                incoming: theirs, local: nil, senderVector: VersionVector(), localVector: VersionVector()) == .insert)
+        #expect(
+            SyncResolution.decide(
+                incoming: theirs, local: nil, senderVector: VersionVector(), localVector: VersionVector([b: 5]))
+                == .keep)
+        #expect(
+            SyncResolution.decide(
+                incoming: mine, local: mine, senderVector: VersionVector(), localVector: VersionVector()) == .keep)
         // Sender had seen my version → theirs descends from mine.
-        #expect(SyncResolution.decide(incoming: theirs, local: mine, senderVector: VersionVector([a: 3]), localVector: VersionVector([a: 3])) == .overwrite)
+        #expect(
+            SyncResolution.decide(
+                incoming: theirs, local: mine, senderVector: VersionVector([a: 3]), localVector: VersionVector([a: 3]))
+                == .overwrite)
         // I had seen theirs → mine descends from theirs.
-        #expect(SyncResolution.decide(incoming: theirs, local: mine, senderVector: VersionVector([b: 5]), localVector: VersionVector([a: 3, b: 5])) == .keep)
+        #expect(
+            SyncResolution.decide(
+                incoming: theirs, local: mine, senderVector: VersionVector([b: 5]),
+                localVector: VersionVector([a: 3, b: 5])) == .keep)
         // Neither → concurrent.
-        #expect(SyncResolution.decide(incoming: theirs, local: mine, senderVector: VersionVector([b: 5]), localVector: VersionVector([a: 3])) == .concurrent)
+        #expect(
+            SyncResolution.decide(
+                incoming: theirs, local: mine, senderVector: VersionVector([b: 5]), localVector: VersionVector([a: 3]))
+                == .concurrent)
     }
 
     @Test func newerEditWinsAndOlderBecomesConflictCopy() {
@@ -64,8 +82,12 @@ import Testing
     @Test func liveNoteBeatsTombstone() {
         let live = note("keep me", by: a, seq: 4)
         let dead = note("", by: b, seq: 7, at: t0.addingTimeInterval(100), deleted: true)
-        #expect(SyncResolution.resolve(local: live, incoming: dead) { _ in "x" } == SyncResolution(winner: live, conflictCopy: nil))
-        #expect(SyncResolution.resolve(local: dead, incoming: live) { _ in "x" } == SyncResolution(winner: live, conflictCopy: nil))
+        #expect(
+            SyncResolution.resolve(local: live, incoming: dead) { _ in "x" }
+                == SyncResolution(winner: live, conflictCopy: nil))
+        #expect(
+            SyncResolution.resolve(local: dead, incoming: live) { _ in "x" }
+                == SyncResolution(winner: live, conflictCopy: nil))
     }
 
     @Test func blankLoserIsNotCopied() {
@@ -75,13 +97,14 @@ import Testing
     }
 
     @Test func conflictMarkerGoesOnTheFirstNonBlankLine() {
-        #expect(NoteTitle.markingConflict(in: "# Title\nbody", from: "iPhone") == "# Title (Conflict from iPhone)\nbody")
+        #expect(
+            NoteTitle.markingConflict(in: "# Title\nbody", from: "iPhone") == "# Title (Conflict from iPhone)\nbody")
         #expect(NoteTitle.markingConflict(in: "\n\n  x", from: "Mac") == "\n\n  x (Conflict from Mac)")
         #expect(NoteTitle.markingConflict(in: "", from: "Mac") == " (Conflict from Mac)")
     }
 
     @Test func uuidV5IsStableAndWellFormed() {
-        let ns = UUID(uuidString: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8")! // DNS namespace
+        let ns = UUID(uuidString: "6BA7B810-9DAD-11D1-80B4-00C04FD430C8")!  // DNS namespace
         // Known RFC 4122 test vector: uuid5(DNS, "www.example.com")
         #expect(UUID.v5(namespace: ns, name: "www.example.com").uuidString == "2ED6657D-E927-568B-95E1-2665A8AEA6A2")
     }

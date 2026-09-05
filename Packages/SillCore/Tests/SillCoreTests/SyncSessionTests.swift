@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import SillCore
 
 /// Server and client actors talking over in-memory channels: pairing, hello, rounds, pokes.
@@ -12,14 +13,20 @@ import Testing
         var phoneFingerprint: Data { phoneCertificate.fingerprint }
 
         init() throws {
-            mac = try Replica("Mac"); phone = try Replica("iPhone")
-            server = SyncServer(store: mac.store); client = SyncClient(store: phone.store)
+            mac = try Replica("Mac")
+            phone = try Replica("iPhone")
+            server = SyncServer(store: mac.store)
+            client = SyncClient(store: phone.store)
             macCertificate = try DeviceCertificate.generate(deviceID: mac.id)
             phoneCertificate = try DeviceCertificate.generate(deviceID: phone.id)
         }
 
         /// Starts a session; returns tasks so tests can wait for them to end.
-        func connect(pairingToken: Data? = nil) -> (server: Task<Void, any Error>, client: Task<Void, any Error>, channels: (InMemoryChannel, InMemoryChannel)) {
+        func connect(
+            pairingToken: Data? = nil
+        ) -> (
+            server: Task<Void, any Error>, client: Task<Void, any Error>, channels: (InMemoryChannel, InMemoryChannel)
+        ) {
             let (macEnd, phoneEnd) = InMemoryChannel.pair()
             macEnd.peerCertificateDER = phoneCertificate.certificateDER
             phoneEnd.peerCertificateDER = macCertificate.certificateDER
@@ -34,9 +41,10 @@ import Testing
         }
     }
 
-    private func waitUntil(timeout: Duration = .seconds(3), _ condition: () throws -> Bool) async throws {
+    // Generous: CI runners have few cores and the simulation suite competes for them.
+    private func waitUntil(timeout: Duration = .seconds(10), _ condition: () async throws -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
-        while try !condition() {
+        while try await !condition() {
             try #require(ContinuousClock.now < deadline, "timed out")
             try await Task.sleep(for: .milliseconds(10))
         }
@@ -96,7 +104,9 @@ import Testing
         try pair.mac.store.updateNote(id: phoneNote.id, content: "mac version", now: Date().addingTimeInterval(1))
         try pair.phone.store.updateNote(id: phoneNote.id, content: "phone version", now: Date().addingTimeInterval(2))
         await pair.client.localChanged()
-        try await waitUntil { try pair.mac.liveContents() == pair.phone.liveContents() && pair.mac.liveContents().count == 3 }
+        try await waitUntil {
+            try pair.mac.liveContents() == pair.phone.liveContents() && pair.mac.liveContents().count == 3
+        }
         #expect(try pair.mac.liveContents()[phoneNote.id] == "phone version")
         #expect(try pair.mac.liveContents().values.contains("mac version (Conflict from Mac)"))
 
@@ -108,7 +118,9 @@ import Testing
     }
 
     @Test func pairingPayloadRoundTripsThroughTheQRString() {
-        let payload = PairingPayload(deviceID: UUID(), name: "Mac", fingerprint: Data(repeating: 7, count: 32), token: Data(repeating: 9, count: 16))
+        let payload = PairingPayload(
+            deviceID: UUID(), name: "Mac", fingerprint: Data(repeating: 7, count: 32),
+            token: Data(repeating: 9, count: 16))
         #expect(payload.qrString.hasPrefix("sill:"))
         #expect(PairingPayload(qrString: payload.qrString) == payload)
         #expect(PairingPayload(qrString: "sill:not-base64!") == nil)
@@ -126,10 +138,109 @@ import Testing
             if case .synced = event { break }
         }
         #expect(seen.first == .connections(1))
-        #expect(seen.contains { if case .paired(let peer) = $0 { return peer.id == pair.phone.id } else { return false } })
+        #expect(
+            seen.contains { if case .paired(let peer) = $0 { return peer.id == pair.phone.id } else { return false } })
         session.channels.0.close()
         _ = try? await session.server.value
         _ = try? await session.client.value
+    }
+
+    /// A write that lands while a batch is being sent must still reach the peer in the next round.
+    /// (Regression: the vector was read after the batch, so the receiver "saw" a row it never got.)
+    @Test func writeDuringABatchIsNotLostToThePeer() async throws {
+        let pair = try Pair()
+        try pair.pairDirectly()
+        let session = pair.connect()
+        try await waitUntil { try pair.mac.store.peer(id: pair.phone.id)?.lastSyncAt != nil }
+
+        // While the phone is sending its batch, the user types another note on the phone.
+        let first = try pair.phone.store.createNote(content: "first")
+        nonisolated(unsafe) var slipped: Note?
+        session.channels.1.onSend = { message in
+            if case .changes = message, slipped == nil {
+                slipped = try? pair.phone.store.createNote(content: "typed mid-batch")
+            }
+        }
+        await pair.client.localChanged()
+        try await waitUntil { try pair.mac.store.note(id: first.id) != nil }
+        session.channels.1.onSend = nil
+        let late = try #require(slipped)
+
+        await pair.client.localChanged()
+        try await waitUntil { try pair.mac.store.note(id: late.id)?.content == "typed mid-batch" }
+
+        session.channels.1.close()
+        _ = try? await session.server.value
+        _ = try? await session.client.value
+    }
+
+    @Test func pairingWindowExpires() async throws {
+        let pair = try Pair()
+        let token = await pair.server.beginPairing(ttl: .milliseconds(30))
+        #expect(await pair.server.isPairing)
+        try await Task.sleep(for: .milliseconds(60))
+        #expect(await !pair.server.isPairing)
+        let session = pair.connect(pairingToken: token)
+        await #expect(throws: SyncError.pairingRejected) { try await session.server.value }
+        await #expect(throws: SyncError.pairingRejected) { try await session.client.value }
+    }
+
+    @Test func tokenComparisonIsExactAndLengthChecked() {
+        #expect(SyncServer.tokensMatch(Data([1, 2, 3]), Data([1, 2, 3])))
+        #expect(!SyncServer.tokensMatch(Data([1, 2, 3]), Data([1, 2, 4])))
+        #expect(!SyncServer.tokensMatch(Data([1, 2, 3]), Data([1, 2])))
+    }
+
+    @Test func silentPeerIsDroppedAfterTheHandshakeTimeout() async throws {
+        let mac = try Replica("Mac")
+        let server = SyncServer(store: mac.store, handshakeTimeout: .milliseconds(50))
+        let (macEnd, phoneEnd) = InMemoryChannel.pair()
+        macEnd.peerCertificateDER = try DeviceCertificate.generate(deviceID: UUID()).certificateDER
+        let serving = Task { try await server.serve(macEnd) }
+        // The phone never says anything.
+        _ = phoneEnd
+        let started = ContinuousClock.now
+        try await serving.value
+        // Returned on its own (the timeout is 50 ms); the bound only guards against hanging.
+        #expect(ContinuousClock.now - started < .seconds(10))
+        #expect(await server.connectionCount == 0)
+    }
+
+    @Test func unpairingEndsTheLiveSession() async throws {
+        let pair = try Pair()
+        try pair.pairDirectly()
+        let session = pair.connect()
+        try await waitUntil { await pair.server.connectionCount == 1 }
+        try pair.mac.store.removePeer(id: pair.phone.id)
+        await pair.server.revoke(peerID: pair.phone.id)
+        _ = try? await session.server.value
+        _ = try? await session.client.value
+        #expect(await pair.server.connectionCount == 0)
+    }
+
+    @Test func aBatchFromOnePhoneReachesAnotherConnectedPhone() async throws {
+        let mac = try Replica("Mac")
+        let a = try Replica("Phone A")
+        let b = try Replica("Phone B")
+        let server = SyncServer(store: mac.store)
+        let macCert = try DeviceCertificate.generate(deviceID: mac.id)
+        var clients: [SyncClient] = []
+        for phone in [a, b] {
+            let cert = try DeviceCertificate.generate(deviceID: phone.id)
+            try mac.store.addPeer(id: phone.id, name: phone.name, fingerprint: cert.fingerprint)
+            try phone.store.addPeer(id: mac.id, name: "Mac", fingerprint: macCert.fingerprint)
+            let (macEnd, phoneEnd) = InMemoryChannel.pair()
+            macEnd.peerCertificateDER = cert.certificateDER
+            phoneEnd.peerCertificateDER = macCert.certificateDER
+            Task { try await server.serve(macEnd) }
+            let client = SyncClient(store: phone.store)
+            Task { try await client.session(phoneEnd) }
+            clients.append(client)
+        }
+        try await waitUntil { await server.connectionCount == 2 }
+        let note = try a.store.createNote(content: "from A")
+        await clients[0].localChanged()
+        try await waitUntil { try b.store.note(id: note.id)?.content == "from A" }
     }
 
     @Test func helloFromAnUnpairedClientEndsTheSessionCleanly() async throws {

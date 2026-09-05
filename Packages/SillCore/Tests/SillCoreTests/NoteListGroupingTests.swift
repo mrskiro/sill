@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import SillCore
 
 @Suite struct NoteListGroupingTests {
@@ -13,7 +14,8 @@ import Testing
 
     private func note(_ title: String, daysAgo: Double) -> Note {
         let date = now.addingTimeInterval(-daysAgo * 86_400)
-        return Note(id: UUID(), content: title, createdAt: date, updatedAt: date, version: Version(device: UUID(), seq: 1))
+        return Note(
+            id: UUID(), content: title, createdAt: date, updatedAt: date, version: Version(device: UUID(), seq: 1))
     }
 
     @Test func groupsLikeAppleNotes() {
@@ -27,19 +29,24 @@ import Testing
             note("last year", daysAgo: 400),
         ]
         let sections = NoteListGrouping.sections(for: notes, now: now, calendar: calendar)
-        #expect(sections.map(\.title) == ["Today", "Yesterday", "Previous 7 Days", "Previous 30 Days", "March", "January", "2025"])
+        #expect(
+            sections.map(\.title) == [
+                "Today", "Yesterday", "Previous 7 Days", "Previous 30 Days", "March", "January", "2025",
+            ])
         #expect(sections.map { $0.notes.count } == [1, 1, 1, 1, 1, 1, 1])
     }
 
     @Test func consecutiveNotesShareASection() {
         let notes = [note("a", daysAgo: 0.1), note("b", daysAgo: 0.2), note("c", daysAgo: 3)]
         let sections = NoteListGrouping.sections(for: notes, now: now, calendar: calendar)
-        #expect(sections.map { ($0.title, $0.notes.count) }.map { "\($0.0):\($0.1)" } == ["Today:2", "Previous 7 Days:1"])
+        #expect(
+            sections.map { ($0.title, $0.notes.count) }.map { "\($0.0):\($0.1)" } == ["Today:2", "Previous 7 Days:1"])
     }
 
     @Test func rowDateIsTimeForTodayAndNumericDateOtherwise() {
         #expect(NoteListGrouping.rowDate(now.addingTimeInterval(-3600), now: now, calendar: calendar) == "9:00")
-        #expect(NoteListGrouping.rowDate(now.addingTimeInterval(-2 * 86_400), now: now, calendar: calendar) == "2026/05/13")
+        #expect(
+            NoteListGrouping.rowDate(now.addingTimeInterval(-2 * 86_400), now: now, calendar: calendar) == "2026/05/13")
     }
 
     @Test(arguments: [

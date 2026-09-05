@@ -75,7 +75,9 @@ public struct SyncResolution: Equatable, Sendable {
 
     /// Same id on every replica that resolves the same conflict, so copies never duplicate.
     public static func conflictCopyID(noteID: UUID, loserVersion: Version) -> UUID {
-        UUID.v5(namespace: conflictNamespace, name: "\(noteID.uuidString)|\(loserVersion.device.uuidString)|\(loserVersion.seq)")
+        UUID.v5(
+            namespace: conflictNamespace,
+            name: "\(noteID.uuidString)|\(loserVersion.device.uuidString)|\(loserVersion.seq)")
     }
 
     private static let conflictNamespace = UUID(uuidString: "6B4D3C3E-0F2A-4C1B-9E4D-5A1F0B7C2D11")!
@@ -117,7 +119,10 @@ extension UUID {
         var bytes = Array(hasher.finalize().prefix(16))
         bytes[6] = (bytes[6] & 0x0F) | 0x50
         bytes[8] = (bytes[8] & 0x3F) | 0x80
-        return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
-                           bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]))
+        return UUID(
+            uuid: (
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7],
+                bytes[8], bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15]
+            ))
     }
 }

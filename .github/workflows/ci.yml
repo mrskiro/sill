@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & test (macOS 26, Xcode 26.6)
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # The image keeps a rolling window of Xcode 26.x releases; always take the newest one
+      # rather than a fixed patch version that will eventually be retired from the image.
+      - name: Select the newest Xcode 26
+        run: |
+          XCODE=$(find /Applications -maxdepth 1 -name 'Xcode_26.*.app' | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE" && xcodebuild -version
+
+      - name: Repository hygiene (no personal paths, keys or identifiers)
+        run: scripts/hygiene-check.sh
+
+      - name: Formatting (swift-format, .swift-format config)
+        run: make lint
+
+      - name: Cache SwiftPM
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            Packages/SillCore/.build
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/SillCore/Package.resolved') }}
+          restore-keys: swiftpm-${{ runner.os }}-
+
+      - name: SillCore tests (store, sync engine, editing, certificates)
+        run: swift test --parallel
+        working-directory: Packages/SillCore
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: make gen
+
+      # App targets are compiled without signing: the hosted tests need a signed app
+      # (data-protection keychain) and real devices, so they run locally via `make test`.
+      - name: Build macOS app
+        run: |
+          xcodebuild -project Sill.xcodeproj -scheme Sill -destination 'platform=macOS' \
+            -resultBundlePath build/Sill-macOS.xcresult -quiet CODE_SIGNING_ALLOWED=NO build
+
+      - name: Build iOS app (simulator)
+        run: |
+          xcodebuild -project Sill.xcodeproj -scheme SillPhone -destination 'generic/platform=iOS Simulator' \
+            -resultBundlePath build/Sill-iOS.xcresult -quiet CODE_SIGNING_ALLOWED=NO build
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xcresult
+          path: build/*.xcresult
+          if-no-files-found: ignore

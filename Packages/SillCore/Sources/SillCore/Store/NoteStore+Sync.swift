@@ -26,7 +26,9 @@ extension NoteStore {
 
             for snapshot in incoming {
                 let local = try NoteRecord.fetchOne(db, key: snapshot.id.uuidString)?.toNote()
-                switch SyncResolution.decide(incoming: snapshot, local: local, senderVector: senderVector, localVector: localVector) {
+                switch SyncResolution.decide(
+                    incoming: snapshot, local: local, senderVector: senderVector, localVector: localVector)
+                {
                 case .insert:
                     try NoteRecord(snapshot).insert(db)
                     result.inserted += 1
@@ -45,7 +47,8 @@ extension NoteStore {
                         try NoteRecord(resolution.winner).update(db)
                     }
                     if let copy = resolution.conflictCopy,
-                       try NoteRecord.fetchOne(db, key: copy.id.uuidString) == nil {
+                        try NoteRecord.fetchOne(db, key: copy.id.uuidString) == nil
+                    {
                         let note = Note(
                             id: copy.id,
                             content: copy.content,

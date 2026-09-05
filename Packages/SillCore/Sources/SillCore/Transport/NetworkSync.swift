@@ -26,7 +26,9 @@ public struct FingerprintPolicy: Sendable {
 
     func validate(_ trust: sec_trust_t) async -> Bool {
         let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
-        guard let chain = SecTrustCopyCertificateChain(secTrust) as? [SecCertificate], let leaf = chain.first else { return false }
+        guard let chain = SecTrustCopyCertificateChain(secTrust) as? [SecCertificate], let leaf = chain.first else {
+            return false
+        }
         let der = SecCertificateCopyData(leaf) as Data
         let fingerprint = DeviceCertificate.fingerprint(of: der)
         let accepted = await isAcceptable(fingerprint)
@@ -42,7 +44,7 @@ func sillStack(identity: DeviceIdentity, policy: FingerprintPolicy) -> NWParamet
         Coder(SyncMessage.self, using: .json) {
             TLS()
                 .peerAuthentication(.required)
-                .localIdentity(sec_identity_create(identity.secIdentity)!)
+                .localIdentity(identity.tlsIdentity)
                 .certificateValidator { _, trust in await policy.validate(trust) }
         }
     }
@@ -50,48 +52,53 @@ func sillStack(identity: DeviceIdentity, policy: FingerprintPolicy) -> NWParamet
 }
 
 /// Wraps a live connection as a `SyncChannel`. The peer certificate is taken from the TLS
-/// metadata that arrives with the first message.
+/// metadata that arrives with the first message. `close()` ends `incoming`, which makes the
+/// session return and, with it, the task that owns the connection.
 public final class NetworkSyncChannel: SyncChannel, @unchecked Sendable {
     private let connection: NetworkConnection<SillProtocol>
     private let lock = NSLock()
     private var certificate: Data?
+    public let incoming: AsyncThrowingStream<SyncMessage, any Error>
+    private let continuation: AsyncThrowingStream<SyncMessage, any Error>.Continuation
+    private var pump: Task<Void, Never>?
 
     public init(_ connection: NetworkConnection<SillProtocol>) {
         self.connection = connection
+        let (stream, continuation) = AsyncThrowingStream<SyncMessage, any Error>.makeStream()
+        incoming = stream
+        self.continuation = continuation
+        pump = Task { [weak self, connection] in
+            do {
+                for try await (content, metadata) in connection.messages {
+                    self?.recordCertificate(from: metadata)
+                    continuation.yield(content)
+                }
+                continuation.finish()
+            } catch {
+                continuation.finish(throwing: error)
+            }
+        }
     }
 
     public func send(_ message: SyncMessage) async throws {
         try await connection.send(message)
     }
 
-    public var incoming: AsyncThrowingStream<SyncMessage, any Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task { [connection] in
-                do {
-                    for try await (content, metadata) in connection.messages {
-                        self.recordCertificate(from: metadata)
-                        continuation.yield(content)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-
     public func peerCertificate() -> Data? {
         lock.withLock { certificate }
     }
 
-    /// Nothing to do: returning from the task that owns the connection closes it.
-    public func close() {}
+    public func close() {
+        continuation.finish()
+        pump?.cancel()
+    }
 
     private func recordCertificate(from metadata: SillProtocol.Metadata) {
         guard peerCertificate() == nil else { return }
         for item in metadata.other {
-            if let tls = item as? NWProtocolTLS.Metadata, let der = Self.leafCertificateDER(tls.securityProtocolMetadata) {
+            if let tls = item as? NWProtocolTLS.Metadata,
+                let der = Self.leafCertificateDER(tls.securityProtocolMetadata)
+            {
                 lock.withLock { certificate = der }
                 return
             }
@@ -128,22 +135,25 @@ public struct SillListener: Sendable {
         let server = server
         let policy = FingerprintPolicy { fingerprint in await server.isAcceptable(fingerprint: fingerprint) }
         let txt = NWTXTRecord([SillService.fingerprintKey: SillService.fingerprintPrefix(identity.fingerprint)])
-        let provider: BonjourListenerProvider? = advertise
+        let provider: BonjourListenerProvider? =
+            advertise
             ? BonjourListenerProvider(name: serviceName, type: SillService.type, txtRecord: txt)
             : nil
         let listener = try NetworkListener(for: provider, using: sillStack(identity: identity, policy: policy))
         listener.onStateUpdate { listener, state in
-            SyncLog.write("listener state \(String(describing: state)) port=\(listener.port.map { String($0.rawValue) } ?? "-")")
+            SyncLog.write(
+                "listener state \(String(describing: state)) port=\(listener.port.map { String($0.rawValue) } ?? "-")")
             if case .ready = state, let port = listener.port { onReady(port.rawValue) }
         }
         try await listener.run { connection in
+            // One connection's failure (rejected pairing, stale hello, protocol mismatch) is
+            // routine and must never take the listener down with it.
             SyncLog.write("listener accepted connection")
             do {
                 try await server.serve(NetworkSyncChannel(connection))
                 SyncLog.write("listener session ended")
             } catch {
                 SyncLog.write("listener session failed: \(error)")
-                throw error
             }
         }
     }
@@ -167,7 +177,8 @@ public enum SillConnector {
         }
         SyncLog.write("connect to \(endpoint) pairing=\(pairingToken != nil)")
         do {
-            try await withNetworkConnection(to: endpoint, using: sillStack(identity: identity, policy: policy)) { connection in
+            try await withNetworkConnection(to: endpoint, using: sillStack(identity: identity, policy: policy)) {
+                connection in
                 try await client.session(NetworkSyncChannel(connection), pairingToken: pairingToken)
             }
             SyncLog.write("connection ended normally")
@@ -177,19 +188,28 @@ public enum SillConnector {
         }
     }
 
-    /// Browses (including peer-to-peer Wi-Fi) until a Sill service with the given fingerprint prefix appears.
-    public static func findServer(fingerprintPrefix: String) async throws -> NWEndpoint {
+    /// Browses (including peer-to-peer Wi-Fi) until a Sill service advertising one of the given
+    /// fingerprint prefixes appears; with several paired Macs, whichever is nearby wins.
+    public static func findServer(fingerprintPrefixes: Set<String>) async throws -> NWEndpoint {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
-        SyncLog.write("browse for fp=\(fingerprintPrefix)")
+        SyncLog.write("browse for fp in \(fingerprintPrefixes.sorted())")
         return try await NetworkBrowser(for: .bonjour(SillService.type, includeTxtRecord: true), using: parameters)
             .onStateUpdate { _, state in SyncLog.write("browser state \(String(describing: state))") }
             .run { endpoints in
-                SyncLog.write("browse results: \(endpoints.map { "\($0.name) fp=\($0.txtRecord[SillService.fingerprintKey] ?? "-")" })")
-                if let match = endpoints.first(where: { $0.txtRecord[SillService.fingerprintKey] == fingerprintPrefix }) {
+                SyncLog.write(
+                    "browse results: \(endpoints.map { "\($0.name) fp=\($0.txtRecord[SillService.fingerprintKey] ?? "-")" })"
+                )
+                if let match = endpoints.first(where: { endpoint in
+                    endpoint.txtRecord[SillService.fingerprintKey].map(fingerprintPrefixes.contains) ?? false
+                }) {
                     return .finish(match.nwEndpoint)
                 }
                 return .continue
             }
+    }
+
+    public static func findServer(fingerprintPrefix: String) async throws -> NWEndpoint {
+        try await findServer(fingerprintPrefixes: [fingerprintPrefix])
     }
 }

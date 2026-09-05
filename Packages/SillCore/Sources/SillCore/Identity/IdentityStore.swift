@@ -6,6 +6,8 @@ public struct DeviceIdentity: @unchecked Sendable {
     public let deviceID: DeviceID
     public let certificateDER: Data
     public let secIdentity: SecIdentity
+    /// The same identity in the form Network.framework's TLS options take.
+    public let tlsIdentity: sec_identity_t
 
     public var fingerprint: Data { DeviceCertificate.fingerprint(of: certificateDER) }
 }
@@ -20,10 +22,13 @@ public struct IdentityStore: Sendable {
         self.label = label
     }
 
-    /// Returns the stored identity, creating and storing a new one on first use.
+    /// Returns the stored identity, creating and storing a new one on first use. An identity
+    /// left behind by a previous install (Keychain items outlive the app's database) is replaced,
+    /// because peers bind the certificate to the device id it names.
     public func loadOrCreate(deviceID: DeviceID) throws -> DeviceIdentity {
         if let existing = try load() {
-            return existing
+            if existing.deviceID == deviceID { return existing }
+            try delete()
         }
         let generated = try DeviceCertificate.generate(deviceID: deviceID)
         try store(generated)
@@ -39,12 +44,19 @@ public struct IdentityStore: Sendable {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
         try check(status, "load identity")
-        let identity = result as! SecIdentity
+        guard let result, CFGetTypeID(result) == SecIdentityGetTypeID() else { throw IdentityError.identityNotFound }
+        let identity = result as! SecIdentity  // type checked above
         var certificate: SecCertificate?
         try check(SecIdentityCopyCertificate(identity, &certificate), "copy certificate")
         guard let certificate else { throw IdentityError.identityNotFound }
+        guard let tlsIdentity = sec_identity_create(identity) else { throw IdentityError.identityNotFound }
         let der = SecCertificateCopyData(certificate) as Data
-        return DeviceIdentity(deviceID: try DeviceCertificate.deviceID(inCertificate: der), certificateDER: der, secIdentity: identity)
+        return DeviceIdentity(
+            deviceID: try DeviceCertificate.deviceID(inCertificate: der),
+            certificateDER: der,
+            secIdentity: identity,
+            tlsIdentity: tlsIdentity
+        )
     }
 
     /// Removes the identity (unpairing everything, or tests cleaning up).
@@ -82,8 +94,12 @@ public struct IdentityStore: Sendable {
             kSecAttrKeyClass: kSecAttrKeyClassPrivate,
             kSecAttrKeySizeInBits: 256,
         ]
-        guard let key = SecKeyCreateWithData(material.privateKey.x963Representation as CFData, keyAttributes as CFDictionary, &keyError) else {
-            throw IdentityError.keychain(errSecParam, "SecKeyCreateWithData: \(keyError?.takeRetainedValue().localizedDescription ?? "?")")
+        guard
+            let key = SecKeyCreateWithData(
+                material.privateKey.x963Representation as CFData, keyAttributes as CFDictionary, &keyError)
+        else {
+            throw IdentityError.keychain(
+                errSecParam, "SecKeyCreateWithData: \(keyError?.takeRetainedValue().localizedDescription ?? "?")")
         }
         var addKey = base(kSecClassKey)
         addKey[kSecValueRef] = key
@@ -95,7 +111,7 @@ public struct IdentityStore: Sendable {
     private func base(_ itemClass: CFString) -> [CFString: Any] {
         var query: [CFString: Any] = [kSecClass: itemClass, kSecAttrLabel: label]
         #if os(macOS)
-        query[kSecUseDataProtectionKeychain] = true
+            query[kSecUseDataProtectionKeychain] = true
         #endif
         return query
     }

@@ -49,7 +49,10 @@ struct NoteListView: View {
         .navigationTitle("Notes")
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                Button("Sync", systemImage: model.sync?.isPaired == true ? "laptopcomputer.and.iphone" : "qrcode.viewfinder") {
+                Button(
+                    "Sync",
+                    systemImage: model.sync?.isPaired == true ? "laptopcomputer.and.iphone" : "qrcode.viewfinder"
+                ) {
                     model.showPairing = true
                 }
             }

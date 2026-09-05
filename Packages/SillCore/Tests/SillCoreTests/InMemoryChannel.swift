@@ -1,4 +1,5 @@
 import Foundation
+
 @testable import SillCore
 
 /// Two cross-wired channels: whatever one sends, the other receives.
@@ -10,13 +11,16 @@ final class InMemoryChannel: SyncChannel, @unchecked Sendable {
     private(set) var sent: [SyncMessage] = []
     /// What this end believes the peer's certificate is (tests build DER via DeviceCertificate).
     var peerCertificateDER: Data?
+    /// Runs synchronously inside `send`, before the message is delivered (to interleave writes).
+    var onSend: ((SyncMessage) -> Void)?
 
     private init() {
         (incoming, inbound) = AsyncThrowingStream.makeStream()
     }
 
     static func pair() -> (InMemoryChannel, InMemoryChannel) {
-        let a = InMemoryChannel(), b = InMemoryChannel()
+        let a = InMemoryChannel()
+        let b = InMemoryChannel()
         a.outbound = b.inbound
         b.outbound = a.inbound
         return (a, b)
@@ -24,6 +28,7 @@ final class InMemoryChannel: SyncChannel, @unchecked Sendable {
 
     func send(_ message: SyncMessage) async throws {
         lock.withLock { sent.append(message) }
+        onSend?(message)
         guard let outbound else { throw SyncError.closed }
         outbound.yield(message)
     }
