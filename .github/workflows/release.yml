@@ -2,7 +2,12 @@
 #
 # Not exercised until these repository secrets exist (Settings › Secrets and variables › Actions):
 #   APPLE_TEAM_ID                 e.g. ABCDE12345
-#   ASC_KEY_ID / ASC_ISSUER_ID    App Store Connect API key (Developer role is enough for notarization)
+#   ASC_KEY_ID / ASC_ISSUER_ID    App Store Connect API key. It has to be able to manage
+#                                 Certificates, Identifiers & Profiles (Admin, or App Manager with
+#                                 that access): the same key notarizes AND creates the Developer ID
+#                                 provisioning profile, which this app needs because its sandbox
+#                                 entitlements include keychain-access-groups. A Developer-role key
+#                                 notarizes fine but fails the export with "No profiles were found".
 #   ASC_API_KEY_P8                the .p8 contents, base64-encoded
 #   MACOS_CERTIFICATE_P12         "Developer ID Application" certificate + key, .p12 base64-encoded
 #   MACOS_CERTIFICATE_PASSWORD    password of that .p12
@@ -96,7 +101,9 @@ jobs:
           rm "Sill-${GITHUB_REF_NAME#v}.zip"
           ditto -c -k --keepParent Sill.app "Sill-${GITHUB_REF_NAME#v}.zip"
           shasum -a 256 "Sill-${GITHUB_REF_NAME#v}.zip" > "Sill-${GITHUB_REF_NAME#v}.zip.sha256"
-          spctl -a -vv -t install Sill.app
+          # `install` is the assessment type for installer packages; an app is assessed as code.
+          spctl -a -vvv --type execute Sill.app
+          xcrun stapler validate Sill.app
 
       - name: GitHub Release
         env:
