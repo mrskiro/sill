@@ -52,6 +52,13 @@ struct PairingScreen: View {
                     }
                 }
                 Section { Text(sync.status.text).foregroundStyle(.secondary) }
+                Section {
+                    Link(
+                        "Report an Issue",
+                        destination: Support.newIssueURL(environment: Support.environmentSummary()))
+                } footer: {
+                    Text(Support.environmentSummary())
+                }
             }
             .navigationTitle("Sync")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }

@@ -1,3 +1,4 @@
+import AppKit
 import SillCore
 import SillMac
 import SwiftUI
@@ -38,7 +39,32 @@ struct SillApp: App {
                 Button("Delete Note") { appDelegate.deleteCurrentNote() }
                     .keyboardShortcut(.delete, modifiers: [.command])
             }
+            // Under "About Sill" in the app menu, where a Sparkle-style updater would sit.
+            CommandGroup(after: .appInfo) {
+                Button("Check for Updates…") { Task { await UpdateCheck.run() } }
+            }
+            CommandGroup(replacing: .help) {
+                Button("Report an Issue…") {
+                    NSWorkspace.shared.open(
+                        Support.newIssueURL(environment: Support.environmentSummary()))
+                }
+                // The log names devices and carries pairing-code prefixes, so it is revealed,
+                // never attached: the user reads it before pasting anything into an issue.
+                Button("Reveal Sync Log in Finder") { revealSyncLog() }
+            }
         }
+    }
+}
+
+/// Selects `sync.log` in Finder, or opens its folder when sync has not written anything yet.
+private func revealSyncLog() {
+    let log = SyncLog.url
+    if FileManager.default.fileExists(atPath: log.path) {
+        NSWorkspace.shared.activateFileViewerSelecting([log])
+    } else {
+        let folder = log.deletingLastPathComponent()
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        NSWorkspace.shared.open(folder)
     }
 }
 

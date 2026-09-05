@@ -1,0 +1,34 @@
+name: Bug report
+description: Something in Sill did not work
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Opening this from the app (Help › Report an Issue…) fills in the environment for you.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps
+      description: The shortest way to reproduce it. "Not sure" is a fine answer.
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      description: App and OS version. Filled in automatically when you open this from the app.
+      placeholder: Sill 0.1.0 (1) · macOS 26.6
+    validations:
+      required: true
+  - type: markdown
+    attributes:
+      value: |
+        Sync problems: `Help › Reveal Sync Log in Finder` on the Mac opens `sync.log`.
+        It contains your device names and the first characters of pairing codes, so read it
+        before pasting anything here.
