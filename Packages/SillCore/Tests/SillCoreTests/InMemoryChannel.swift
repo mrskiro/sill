@@ -1,4 +1,5 @@
 import Foundation
+
 @testable import SillCore
 
 /// Two cross-wired channels: whatever one sends, the other receives.
@@ -18,7 +19,8 @@ final class InMemoryChannel: SyncChannel, @unchecked Sendable {
     }
 
     static func pair() -> (InMemoryChannel, InMemoryChannel) {
-        let a = InMemoryChannel(), b = InMemoryChannel()
+        let a = InMemoryChannel()
+        let b = InMemoryChannel()
         a.outbound = b.inbound
         b.outbound = a.inbound
         return (a, b)

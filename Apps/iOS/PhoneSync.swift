@@ -99,7 +99,8 @@ final class PhoneSync {
         while !Task.isCancelled {
             let pairing = pendingPairing
             pendingPairing = nil
-            let targets: Set<String> = pairing.map { [SillService.fingerprintPrefix($0.fingerprint)] }
+            let targets: Set<String> =
+                pairing.map { [SillService.fingerprintPrefix($0.fingerprint)] }
                 ?? Set(peers.map { SillService.fingerprintPrefix($0.fingerprint) })
             guard !targets.isEmpty else {
                 status = .unpaired

@@ -1,13 +1,8 @@
 import AppKit
-import KeyboardShortcuts
 import SillCore
+import SillMac
 import SwiftUI
 import os
-
-extension KeyboardShortcuts.Name {
-    /// ⌥S by default. Changeable later from Settings.
-    static let togglePanel = Self("togglePanel", initial: .init(.s, modifiers: [.option]))
-}
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -49,7 +44,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         do {
             let identityStore = IdentityStore(label: Self.identityLabel)
-            if Self.isTestMode { try? identityStore.delete() } // fresh identity per test run
+            if Self.isTestMode { try? identityStore.delete() }  // fresh identity per test run
             let identity = try identityStore.loadOrCreate(deviceID: store.deviceID)
             let sync = MacSync(store: store, identity: identity, advertise: !Self.isTestMode)
             self.sync = sync
@@ -94,7 +89,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             let query = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             switch url.path {
             case "/create":
-                if let content = query.first(where: { $0.name == "content" })?.value, let note = try? store.createNote(content: content) {
+                if let content = query.first(where: { $0.name == "content" })?.value,
+                    let note = try? store.createNote(content: content)
+                {
                     SyncLog.write("debug: created note \(note.id)")
                     sync?.poke()
                 }

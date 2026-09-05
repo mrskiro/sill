@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import SillCore
 
 @Suite struct NoteStoreTests {
@@ -84,7 +85,8 @@ import Testing
     @Test func aVersionCanNeverBeStoredTwice() throws {
         let (_, store) = try makeStore()
         let note = try store.createNote(content: "one", now: t0)
-        let duplicate = Note(id: UUID(), content: "same version, different note", createdAt: t0, updatedAt: t0, version: note.version)
+        let duplicate = Note(
+            id: UUID(), content: "same version, different note", createdAt: t0, updatedAt: t0, version: note.version)
         // The schema itself refuses a second row with an existing (device, seq), whatever the code above it does.
         #expect(throws: (any Error).self) {
             try store.writer.write { db in try NoteRecord(duplicate).insert(db) }
@@ -107,7 +109,8 @@ import Testing
         #expect(result.note.version.seq == 2)
         #expect(result.copiedAside == nil)
         // Same text again: no new version.
-        #expect(try store.saveEdit(id: note.id, text: "base typed", expecting: result.note.version)?.note.version.seq == 2)
+        #expect(
+            try store.saveEdit(id: note.id, text: "base typed", expecting: result.note.version)?.note.version.seq == 2)
     }
 
     @Test func saveEditPreservesAVersionThatArrivedUnderneathTheEditor() throws {
@@ -119,7 +122,8 @@ import Testing
         var remote = note
         remote.content = "phone wrote this"
         remote.version = Version(device: phone, seq: 1)
-        try store.apply([remote], senderID: phone, senderName: "Phone", senderVector: VersionVector([phone: 1, store.deviceID: 1]))
+        try store.apply(
+            [remote], senderID: phone, senderName: "Phone", senderVector: VersionVector([phone: 1, store.deviceID: 1]))
 
         let result = try #require(try store.saveEdit(id: note.id, text: "base typed", expecting: note.version, now: t2))
         #expect(result.note.content == "base typed")
@@ -128,7 +132,8 @@ import Testing
         #expect(try store.liveNotes().count == 2)
 
         // Saving again with the now-current version copies nothing more.
-        let again = try #require(try store.saveEdit(id: note.id, text: "base typed more", expecting: result.note.version, now: t2))
+        let again = try #require(
+            try store.saveEdit(id: note.id, text: "base typed more", expecting: result.note.version, now: t2))
         #expect(again.copiedAside == nil)
     }
 
@@ -136,7 +141,8 @@ import Testing
         let (_, store) = try makeStore()
         let note = try store.createNote(content: "keep", now: t0)
         let deleted = try #require(try store.deleteNote(id: note.id, now: t1))
-        let result = try #require(try store.saveEdit(id: note.id, text: "keep typing", expecting: note.version, now: t2))
+        let result = try #require(
+            try store.saveEdit(id: note.id, text: "keep typing", expecting: note.version, now: t2))
         #expect(result.note.isDeleted == false)
         #expect(result.copiedAside == nil)
         #expect(result.note.version.seq > deleted.version.seq)

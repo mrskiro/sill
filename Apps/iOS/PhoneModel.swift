@@ -6,7 +6,7 @@ import os
 /// Where the app is: the list, or one note's editor. A new note has no id until it is saved.
 enum Destination: Hashable {
     case existing(UUID)
-    case new(UUID) // draft token, so two "new" pushes are distinct
+    case new(UUID)  // draft token, so two "new" pushes are distinct
 }
 
 @MainActor
@@ -35,7 +35,8 @@ final class PhoneModel {
     }
 
     static func make() throws -> PhoneModel {
-        let url = isTestMode
+        let url =
+            isTestMode
             ? FileManager.default.temporaryDirectory
                 .appendingPathComponent("sill-tests/\(UUID().uuidString)", isDirectory: true)
                 .appendingPathComponent("sill.sqlite")

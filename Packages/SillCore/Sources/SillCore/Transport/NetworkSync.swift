@@ -26,7 +26,9 @@ public struct FingerprintPolicy: Sendable {
 
     func validate(_ trust: sec_trust_t) async -> Bool {
         let secTrust = sec_trust_copy_ref(trust).takeRetainedValue()
-        guard let chain = SecTrustCopyCertificateChain(secTrust) as? [SecCertificate], let leaf = chain.first else { return false }
+        guard let chain = SecTrustCopyCertificateChain(secTrust) as? [SecCertificate], let leaf = chain.first else {
+            return false
+        }
         let der = SecCertificateCopyData(leaf) as Data
         let fingerprint = DeviceCertificate.fingerprint(of: der)
         let accepted = await isAcceptable(fingerprint)
@@ -94,7 +96,9 @@ public final class NetworkSyncChannel: SyncChannel, @unchecked Sendable {
     private func recordCertificate(from metadata: SillProtocol.Metadata) {
         guard peerCertificate() == nil else { return }
         for item in metadata.other {
-            if let tls = item as? NWProtocolTLS.Metadata, let der = Self.leafCertificateDER(tls.securityProtocolMetadata) {
+            if let tls = item as? NWProtocolTLS.Metadata,
+                let der = Self.leafCertificateDER(tls.securityProtocolMetadata)
+            {
                 lock.withLock { certificate = der }
                 return
             }
@@ -131,12 +135,14 @@ public struct SillListener: Sendable {
         let server = server
         let policy = FingerprintPolicy { fingerprint in await server.isAcceptable(fingerprint: fingerprint) }
         let txt = NWTXTRecord([SillService.fingerprintKey: SillService.fingerprintPrefix(identity.fingerprint)])
-        let provider: BonjourListenerProvider? = advertise
+        let provider: BonjourListenerProvider? =
+            advertise
             ? BonjourListenerProvider(name: serviceName, type: SillService.type, txtRecord: txt)
             : nil
         let listener = try NetworkListener(for: provider, using: sillStack(identity: identity, policy: policy))
         listener.onStateUpdate { listener, state in
-            SyncLog.write("listener state \(String(describing: state)) port=\(listener.port.map { String($0.rawValue) } ?? "-")")
+            SyncLog.write(
+                "listener state \(String(describing: state)) port=\(listener.port.map { String($0.rawValue) } ?? "-")")
             if case .ready = state, let port = listener.port { onReady(port.rawValue) }
         }
         try await listener.run { connection in
@@ -171,7 +177,8 @@ public enum SillConnector {
         }
         SyncLog.write("connect to \(endpoint) pairing=\(pairingToken != nil)")
         do {
-            try await withNetworkConnection(to: endpoint, using: sillStack(identity: identity, policy: policy)) { connection in
+            try await withNetworkConnection(to: endpoint, using: sillStack(identity: identity, policy: policy)) {
+                connection in
                 try await client.session(NetworkSyncChannel(connection), pairingToken: pairingToken)
             }
             SyncLog.write("connection ended normally")
@@ -190,7 +197,9 @@ public enum SillConnector {
         return try await NetworkBrowser(for: .bonjour(SillService.type, includeTxtRecord: true), using: parameters)
             .onStateUpdate { _, state in SyncLog.write("browser state \(String(describing: state))") }
             .run { endpoints in
-                SyncLog.write("browse results: \(endpoints.map { "\($0.name) fp=\($0.txtRecord[SillService.fingerprintKey] ?? "-")" })")
+                SyncLog.write(
+                    "browse results: \(endpoints.map { "\($0.name) fp=\($0.txtRecord[SillService.fingerprintKey] ?? "-")" })"
+                )
                 if let match = endpoints.first(where: { endpoint in
                     endpoint.txtRecord[SillService.fingerprintKey].map(fingerprintPrefixes.contains) ?? false
                 }) {

@@ -1,6 +1,7 @@
 import SillCore
 import Testing
 import UIKit
+
 @testable import Sill
 
 /// Runs inside Sill on the simulator against a throwaway database.
@@ -91,7 +92,9 @@ struct PhoneFlowTests {
         var remote = open
         remote.content = "edited on the mac"
         remote.version = Version(device: mac, seq: 1)
-        try model.store.apply([remote], senderID: mac, senderName: "Mac", senderVector: VersionVector([mac: 1, model.store.deviceID: open.version.seq]))
+        try model.store.apply(
+            [remote], senderID: mac, senderName: "Mac",
+            senderVector: VersionVector([mac: 1, model.store.deviceID: open.version.seq]))
         try await waitUntil { draft.text == "edited on the mac" }
         try await waitUntil { textView.text == "edited on the mac" }
 
@@ -99,7 +102,9 @@ struct PhoneFlowTests {
         var newer = remote
         newer.content = "mac wrote more"
         newer.version = Version(device: mac, seq: 2)
-        try model.store.apply([newer], senderID: mac, senderName: "Mac", senderVector: VersionVector([mac: 2, model.store.deviceID: open.version.seq]))
+        try model.store.apply(
+            [newer], senderID: mac, senderName: "Mac",
+            senderVector: VersionVector([mac: 2, model.store.deviceID: open.version.seq]))
         try await waitUntil { self.model.notes.contains { $0.content == "mac wrote more (Conflict from Mac)" } }
         #expect(draft.text == "edited on the mac plus local")
         try await waitUntil { (try? self.model.store.note(id: open.id)?.content) == "edited on the mac plus local" }
@@ -110,15 +115,24 @@ struct PhoneFlowTests {
     /// Renders the grouped list with notes of assorted ages into tmp/list.png (pulled by the CLI for a visual check).
     @Test func rendersTheGroupedListForInspection() async throws {
         let now = Date()
-        for (title, daysAgo) in [("Meeting notes\n- decide the roadmap", 0.01), ("Groceries\nbread, milk", 1.0), ("Draft for Slack\nWe should ship on Friday.", 4.0), ("Idea", 20.0), ("Old plan\nRBAC", 70.0), ("Last year\nkeep", 400.0)] {
+        for (title, daysAgo) in [
+            ("Meeting notes\n- decide the roadmap", 0.01), ("Groceries\nbread, milk", 1.0),
+            ("Draft for Slack\nWe should ship on Friday.", 4.0), ("Idea", 20.0), ("Old plan\nRBAC", 70.0),
+            ("Last year\nkeep", 400.0),
+        ] {
             let date = now.addingTimeInterval(-daysAgo * 86_400)
             try model.store.createNote(content: title, now: date)
         }
         model.path = []
         try await waitUntil { self.allTextViews().isEmpty }
         try await Task.sleep(for: .milliseconds(600))
-        let window = try #require(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first { $0.isKeyWindow })
-        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
+        let window = try #require(
+            UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.flatMap(\.windows).first {
+                $0.isKeyWindow
+            })
+        let image = UIGraphicsImageRenderer(bounds: window.bounds).image { _ in
+            window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
+        }
         let url = FileManager.default.temporaryDirectory.appendingPathComponent("list.png")
         try image.pngData()?.write(to: url)
         #expect(FileManager.default.fileExists(atPath: url.path))
@@ -157,8 +171,8 @@ struct PhoneFlowTests {
     }
 }
 
-private extension UIView {
-    func allDescendants<T: UIView>(of type: T.Type) -> [T] {
+extension UIView {
+    fileprivate func allDescendants<T: UIView>(of type: T.Type) -> [T] {
         subviews.flatMap { view -> [T] in
             var result: [T] = []
             if let match = view as? T { result.append(match) }

@@ -26,7 +26,8 @@ struct EditorTextView: NSViewRepresentable {
         textView.isVerticallyResizable = true
         textView.isHorizontallyResizable = false
         textView.textContainer?.widthTracksTextView = true
-        textView.textContainer?.containerSize = NSSize(width: scrollView.contentSize.width, height: .greatestFiniteMagnitude)
+        textView.textContainer?.containerSize = NSSize(
+            width: scrollView.contentSize.width, height: .greatestFiniteMagnitude)
         return scrollView
     }
 
@@ -126,7 +127,8 @@ final class MarkdownTextView: NSTextView {
 
     /// ⌘Return toggles the checkbox on the current line.
     override func keyDown(with event: NSEvent) {
-        let isCommandReturn = event.keyCode == 36 && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
+        let isCommandReturn =
+            event.keyCode == 36 && event.modifierFlags.intersection(.deviceIndependentFlagsMask) == .command
         if isCommandReturn, let edit = MarkdownEditing.toggleCheckbox(in: string, selection: selectedRange()) {
             apply(edit)
             return

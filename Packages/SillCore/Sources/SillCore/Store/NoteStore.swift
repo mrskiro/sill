@@ -73,7 +73,8 @@ public final class NoteStore: Sendable {
     /// and the receiver would then believe it had seen that row forever.
     public func changesSnapshot(since remote: VersionVector) throws -> (notes: [Note], vector: VersionVector) {
         try writer.read { db in
-            let notes = try NoteRecord
+            let notes =
+                try NoteRecord
                 .order(sql: "origin_device, origin_seq")
                 .fetchAll(db)
                 .map { try $0.toNote() }
@@ -147,7 +148,8 @@ public final class NoteStore: Sendable {
             guard var note = try NoteRecord.fetchOne(db, key: id.uuidString)?.toNote() else { return nil }
             var copied: Note?
             if note.version != version, !note.isDeleted, note.content != text,
-               !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                !note.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            {
                 let name = try self.deviceName(db, for: note.version.device)
                 copied = Note(
                     id: SyncResolution.conflictCopyID(noteID: note.id, loserVersion: note.version),
@@ -204,7 +206,9 @@ public final class NoteStore: Sendable {
     static func fetchVector(_ db: Database) throws -> VersionVector {
         var vector = VersionVector()
         for row in try SeenRecord.fetchAll(db) {
-            guard let device = UUID(uuidString: row.deviceId) else { throw StoreError.corruptRow("seen \(row.deviceId)") }
+            guard let device = UUID(uuidString: row.deviceId) else {
+                throw StoreError.corruptRow("seen \(row.deviceId)")
+            }
             vector.record(Version(device: device, seq: row.maxSeq))
         }
         return vector

@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import SillCore
 
 /// Randomised multi-device simulation. Properties checked after a full sweep:
@@ -8,12 +9,12 @@ import Testing
 @Suite struct SyncSimulationTests {
     struct UserWrite {
         let noteID: UUID
-        let content: String?          // nil for a delete
+        let content: String?  // nil for a delete
         let version: Version
         let vectorAtWrite: VersionVector
     }
 
-    @Test(arguments: Array<UInt64>(1...16))
+    @Test(arguments: [UInt64](1...16))
     func replicasConvergeAndPreserveEveryUnsupersededEdit(seed: UInt64) throws {
         var rng = SeededGenerator(seed: seed)
         let replicas = [try Replica("Mac"), try Replica("iPhone"), try Replica("iPad")]
@@ -24,19 +25,25 @@ import Testing
         var knownIDs: [UUID] = []
 
         for step in 0..<400 {
-            clock += Double(Int.random(in: 0...3, using: &rng)) // ties on purpose
+            clock += Double(Int.random(in: 0...3, using: &rng))  // ties on purpose
             let now = t0.addingTimeInterval(clock)
             let replica = replicas.randomElement(using: &rng)!
             switch Int.random(in: 0..<10, using: &rng) {
             case 0...2:
                 let note = try replica.store.createNote(content: "s\(step) \(replica.name) new", now: now)
                 knownIDs.append(note.id)
-                writes.append(UserWrite(noteID: note.id, content: note.content, version: note.version, vectorAtWrite: try replica.store.vector()))
+                writes.append(
+                    UserWrite(
+                        noteID: note.id, content: note.content, version: note.version,
+                        vectorAtWrite: try replica.store.vector()))
             case 3...6:
-                guard let id = knownIDs.randomElement(using: &rng), try replica.store.note(id: id) != nil else { continue }
+                guard let id = knownIDs.randomElement(using: &rng), try replica.store.note(id: id) != nil else {
+                    continue
+                }
                 let before = try replica.store.vector()
                 if let note = try replica.store.updateNote(id: id, content: "s\(step) \(replica.name) edit", now: now) {
-                    writes.append(UserWrite(noteID: id, content: note.content, version: note.version, vectorAtWrite: before))
+                    writes.append(
+                        UserWrite(noteID: id, content: note.content, version: note.version, vectorAtWrite: before))
                 }
             case 7:
                 guard let id = knownIDs.randomElement(using: &rng) else { continue }
@@ -74,9 +81,10 @@ import Testing
         for write in writes {
             guard let content = write.content else { continue }
             let superseded = writes.contains { later in
-                later.noteID == write.noteID && later.version != write.version &&
-                (later.version.device == write.version.device ? later.version.seq > write.version.seq
-                                                               : later.vectorAtWrite.contains(write.version))
+                later.noteID == write.noteID && later.version != write.version
+                    && (later.version.device == write.version.device
+                        ? later.version.seq > write.version.seq
+                        : later.vectorAtWrite.contains(write.version))
             }
             if !superseded {
                 let survived = survivors.contains { $0 == content || $0.hasPrefix(content + " (Conflict from") }

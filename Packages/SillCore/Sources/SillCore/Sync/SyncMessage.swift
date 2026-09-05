@@ -23,7 +23,9 @@ public enum SyncMessage: Codable, Sendable, Equatable {
         public var protocolVersion: Int
         public var vector: VersionVector
 
-        public init(deviceID: DeviceID, name: String, protocolVersion: Int = SyncMessage.protocolVersion, vector: VersionVector) {
+        public init(
+            deviceID: DeviceID, name: String, protocolVersion: Int = SyncMessage.protocolVersion, vector: VersionVector
+        ) {
             self.deviceID = deviceID
             self.name = name
             self.protocolVersion = protocolVersion

@@ -20,11 +20,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Select Xcode 26.6
-        run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version
+      # The image keeps a rolling window of Xcode 26.x releases; always take the newest one
+      # rather than a fixed patch version that will eventually be retired from the image.
+      - name: Select the newest Xcode 26
+        run: |
+          XCODE=$(find /Applications -maxdepth 1 -name 'Xcode_26.*.app' | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE" && xcodebuild -version
 
       - name: Repository hygiene (no personal paths, keys or identifiers)
         run: scripts/hygiene-check.sh
+
+      - name: Formatting (swift-format, .swift-format config)
+        run: make lint
 
       - name: Cache SwiftPM
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
@@ -51,9 +58,17 @@ jobs:
       - name: Build macOS app
         run: |
           xcodebuild -project Sill.xcodeproj -scheme Sill -destination 'platform=macOS' \
-            -quiet CODE_SIGNING_ALLOWED=NO build
+            -resultBundlePath build/Sill-macOS.xcresult -quiet CODE_SIGNING_ALLOWED=NO build
 
       - name: Build iOS app (simulator)
         run: |
           xcodebuild -project Sill.xcodeproj -scheme SillPhone -destination 'generic/platform=iOS Simulator' \
-            -quiet CODE_SIGNING_ALLOWED=NO build
+            -resultBundlePath build/Sill-iOS.xcresult -quiet CODE_SIGNING_ALLOWED=NO build
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: xcresult
+          path: build/*.xcresult
+          if-no-files-found: ignore

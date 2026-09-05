@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import SillCore
 
 @Suite struct OpenNoteReconciliationTests {
@@ -7,8 +8,9 @@ import Testing
     let t0 = Date(timeIntervalSince1970: 1_700_000_000)
 
     private func note(_ content: String, device: UUID, seq: Int64, deleted: Bool = false) -> Note {
-        Note(id: UUID(uuidString: "22222222-0000-0000-0000-000000000000")!, content: content,
-             createdAt: t0, updatedAt: t0, deletedAt: deleted ? t0 : nil, version: Version(device: device, seq: seq))
+        Note(
+            id: UUID(uuidString: "22222222-0000-0000-0000-000000000000")!, content: content,
+            createdAt: t0, updatedAt: t0, deletedAt: deleted ? t0 : nil, version: Version(device: device, seq: seq))
     }
 
     @Test func cleanEditorReloadsARemoteVersion() {

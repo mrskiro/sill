@@ -43,7 +43,10 @@ public actor SyncClient {
     /// Runs a session until the channel closes. Pass `pairingToken` (from the QR) on first contact.
     /// TLS has already checked the server's certificate; the session binds it to a paired device.
     public func session(_ channel: any SyncChannel, pairingToken: Data? = nil) async throws {
-        defer { channel.close(); sessionSink.yield(.ended) }
+        defer {
+            channel.close()
+            sessionSink.yield(.ended)
+        }
         let (stream, continuation) = AsyncStream<Event>.makeStream()
         events = continuation
         defer { events = nil }
@@ -96,10 +99,14 @@ public actor SyncClient {
                 throw SyncError.pairingRejected
 
             case (.hello, .message(.hello(let hello))):
-                guard hello.protocolVersion == SyncMessage.protocolVersion else { throw SyncError.protocolVersion(hello.protocolVersion) }
+                guard hello.protocolVersion == SyncMessage.protocolVersion else {
+                    throw SyncError.protocolVersion(hello.protocolVersion)
+                }
                 let (fingerprint, certificateDeviceID) = try channel.peerIdentity()
                 if peer == nil { peer = try store.peer(fingerprint: fingerprint) }
-                guard let known = peer, hello.deviceID == known.id, certificateDeviceID == known.id else { throw SyncError.notPaired }
+                guard let known = peer, hello.deviceID == known.id, certificateDeviceID == known.id else {
+                    throw SyncError.notPaired
+                }
                 serverVector = hello.vector
                 watchdog.cancel()
                 log.info("session with \(known.name, privacy: .public)")
@@ -130,7 +137,8 @@ public actor SyncClient {
                 } else {
                     phase = .idle
                 }
-            case (.inRound, .localChange), (.inRound, .message(.poke)), (.hello, .localChange), (.pairing, .localChange):
+            case (.inRound, .localChange), (.inRound, .message(.poke)), (.hello, .localChange),
+                (.pairing, .localChange):
                 // A trigger while busy: run another round as soon as this one ends.
                 roundRequested = true
 
@@ -150,7 +158,8 @@ public actor SyncClient {
     // MARK: Internals
 
     private func sendHello(over channel: any SyncChannel) async throws {
-        try await channel.send(.hello(.init(deviceID: store.deviceID, name: store.deviceName, vector: try store.vector())))
+        try await channel.send(
+            .hello(.init(deviceID: store.deviceID, name: store.deviceName, vector: try store.vector())))
     }
 
     private func startRound(since serverVector: VersionVector, over channel: any SyncChannel) async throws {

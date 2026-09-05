@@ -27,8 +27,9 @@ public struct PairingPayload: Codable, Equatable, Sendable {
 
     public init?(qrString: String) {
         guard qrString.hasPrefix("sill:"), let data = Data(base64Encoded: String(qrString.dropFirst(5))),
-              let payload = try? JSONDecoder().decode(PairingPayload.self, from: data),
-              payload.version == Self.currentVersion, payload.fingerprint.count == 32 else { return nil }
+            let payload = try? JSONDecoder().decode(PairingPayload.self, from: data),
+            payload.version == Self.currentVersion, payload.fingerprint.count == 32
+        else { return nil }
         self = payload
     }
 }

@@ -69,7 +69,8 @@ final class MacSync {
     @discardableResult
     func beginPairing() async -> PairingPayload {
         let token = await server.beginPairing(ttl: Self.pairingWindow)
-        let payload = PairingPayload(deviceID: store.deviceID, name: store.deviceName, fingerprint: identity.fingerprint, token: token)
+        let payload = PairingPayload(
+            deviceID: store.deviceID, name: store.deviceName, fingerprint: identity.fingerprint, token: token)
         pairingPayload = payload
         SyncLog.write("mac: pairing window open, qr \(payload.qrString.count) chars")
         Task { [weak self] in

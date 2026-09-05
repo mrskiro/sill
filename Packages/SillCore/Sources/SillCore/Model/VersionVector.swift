@@ -44,7 +44,8 @@ extension VersionVector: Codable {
         var result: [DeviceID: Int64] = [:]
         for (key, value) in raw {
             guard let device = UUID(uuidString: key) else {
-                throw DecodingError.dataCorrupted(.init(codingPath: decoder.codingPath, debugDescription: "Invalid device id \(key)"))
+                throw DecodingError.dataCorrupted(
+                    .init(codingPath: decoder.codingPath, debugDescription: "Invalid device id \(key)"))
             }
             result[device] = value
         }

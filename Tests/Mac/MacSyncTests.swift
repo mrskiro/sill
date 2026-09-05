@@ -2,6 +2,7 @@ import AppKit
 import Network
 import SillCore
 import Testing
+
 @testable import Sill
 
 /// Nested so it runs serially with the capture tests (they share the app).
@@ -39,13 +40,16 @@ extension CaptureFlowTests {
 
             let endpoint = NWEndpoint.hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: sync.port!)!)
             let phoneTask = Task {
-                try await SillConnector.connect(to: endpoint, identity: phoneIdentity, client: client,
-                                                expectedFingerprint: payload.fingerprint, pairingToken: payload.token)
+                try await SillConnector.connect(
+                    to: endpoint, identity: phoneIdentity, client: client,
+                    expectedFingerprint: payload.fingerprint, pairingToken: payload.token)
             }
 
             // The sidebar's observation picks up the synced note.
             try await waitUntil { self.app.model.notes.contains { $0.id == phoneNote.id } }
-            try await waitUntil { sync.peers.map(\.name) == ["Test iPhone"] && sync.pairingPayload == nil && sync.connections == 1 }
+            try await waitUntil {
+                sync.peers.map(\.name) == ["Test iPhone"] && sync.pairingPayload == nil && sync.connections == 1
+            }
             #expect(sync.statusText == "iPhone connected")
 
             // Typing on the Mac → autosave → poke → phone.

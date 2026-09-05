@@ -1,5 +1,6 @@
 import Foundation
 import Testing
+
 @testable import SillCore
 
 /// Server and client actors talking over in-memory channels: pairing, hello, rounds, pokes.
@@ -12,14 +13,20 @@ import Testing
         var phoneFingerprint: Data { phoneCertificate.fingerprint }
 
         init() throws {
-            mac = try Replica("Mac"); phone = try Replica("iPhone")
-            server = SyncServer(store: mac.store); client = SyncClient(store: phone.store)
+            mac = try Replica("Mac")
+            phone = try Replica("iPhone")
+            server = SyncServer(store: mac.store)
+            client = SyncClient(store: phone.store)
             macCertificate = try DeviceCertificate.generate(deviceID: mac.id)
             phoneCertificate = try DeviceCertificate.generate(deviceID: phone.id)
         }
 
         /// Starts a session; returns tasks so tests can wait for them to end.
-        func connect(pairingToken: Data? = nil) -> (server: Task<Void, any Error>, client: Task<Void, any Error>, channels: (InMemoryChannel, InMemoryChannel)) {
+        func connect(
+            pairingToken: Data? = nil
+        ) -> (
+            server: Task<Void, any Error>, client: Task<Void, any Error>, channels: (InMemoryChannel, InMemoryChannel)
+        ) {
             let (macEnd, phoneEnd) = InMemoryChannel.pair()
             macEnd.peerCertificateDER = phoneCertificate.certificateDER
             phoneEnd.peerCertificateDER = macCertificate.certificateDER
@@ -96,7 +103,9 @@ import Testing
         try pair.mac.store.updateNote(id: phoneNote.id, content: "mac version", now: Date().addingTimeInterval(1))
         try pair.phone.store.updateNote(id: phoneNote.id, content: "phone version", now: Date().addingTimeInterval(2))
         await pair.client.localChanged()
-        try await waitUntil { try pair.mac.liveContents() == pair.phone.liveContents() && pair.mac.liveContents().count == 3 }
+        try await waitUntil {
+            try pair.mac.liveContents() == pair.phone.liveContents() && pair.mac.liveContents().count == 3
+        }
         #expect(try pair.mac.liveContents()[phoneNote.id] == "phone version")
         #expect(try pair.mac.liveContents().values.contains("mac version (Conflict from Mac)"))
 
@@ -108,7 +117,9 @@ import Testing
     }
 
     @Test func pairingPayloadRoundTripsThroughTheQRString() {
-        let payload = PairingPayload(deviceID: UUID(), name: "Mac", fingerprint: Data(repeating: 7, count: 32), token: Data(repeating: 9, count: 16))
+        let payload = PairingPayload(
+            deviceID: UUID(), name: "Mac", fingerprint: Data(repeating: 7, count: 32),
+            token: Data(repeating: 9, count: 16))
         #expect(payload.qrString.hasPrefix("sill:"))
         #expect(PairingPayload(qrString: payload.qrString) == payload)
         #expect(PairingPayload(qrString: "sill:not-base64!") == nil)
@@ -126,7 +137,8 @@ import Testing
             if case .synced = event { break }
         }
         #expect(seen.first == .connections(1))
-        #expect(seen.contains { if case .paired(let peer) = $0 { return peer.id == pair.phone.id } else { return false } })
+        #expect(
+            seen.contains { if case .paired(let peer) = $0 { return peer.id == pair.phone.id } else { return false } })
         session.channels.0.close()
         _ = try? await session.server.value
         _ = try? await session.client.value
@@ -205,7 +217,9 @@ import Testing
     }
 
     @Test func aBatchFromOnePhoneReachesAnotherConnectedPhone() async throws {
-        let mac = try Replica("Mac"), a = try Replica("Phone A"), b = try Replica("Phone B")
+        let mac = try Replica("Mac")
+        let a = try Replica("Phone A")
+        let b = try Replica("Phone B")
         let server = SyncServer(store: mac.store)
         let macCert = try DeviceCertificate.generate(deviceID: mac.id)
         var clients: [SyncClient] = []

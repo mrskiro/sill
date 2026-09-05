@@ -4,19 +4,28 @@ import GRDB
 extension NoteStore {
     public func peers() throws -> [Peer] {
         try writer.read { db in
-            try Row.fetchAll(db, sql: "SELECT id, name, cert_fingerprint, paired_at, last_sync_at FROM peer ORDER BY paired_at").map(Self.peer)
+            try Row.fetchAll(
+                db, sql: "SELECT id, name, cert_fingerprint, paired_at, last_sync_at FROM peer ORDER BY paired_at"
+            ).map(Self.peer)
         }
     }
 
     public func peer(fingerprint: Data) throws -> Peer? {
         try writer.read { db in
-            try Row.fetchOne(db, sql: "SELECT id, name, cert_fingerprint, paired_at, last_sync_at FROM peer WHERE cert_fingerprint = ?", arguments: [fingerprint]).map(Self.peer)
+            try Row.fetchOne(
+                db,
+                sql: "SELECT id, name, cert_fingerprint, paired_at, last_sync_at FROM peer WHERE cert_fingerprint = ?",
+                arguments: [fingerprint]
+            ).map(Self.peer)
         }
     }
 
     public func peer(id: DeviceID) throws -> Peer? {
         try writer.read { db in
-            try Row.fetchOne(db, sql: "SELECT id, name, cert_fingerprint, paired_at, last_sync_at FROM peer WHERE id = ?", arguments: [id.uuidString]).map(Self.peer)
+            try Row.fetchOne(
+                db, sql: "SELECT id, name, cert_fingerprint, paired_at, last_sync_at FROM peer WHERE id = ?",
+                arguments: [id.uuidString]
+            ).map(Self.peer)
         }
     }
 
@@ -41,7 +50,9 @@ extension NoteStore {
 
     public func markSynced(peerID: DeviceID, now: Date = Date()) throws {
         try writer.write { db in
-            try db.execute(sql: "UPDATE peer SET last_sync_at = ? WHERE id = ?", arguments: [now.timeIntervalSince1970, peerID.uuidString])
+            try db.execute(
+                sql: "UPDATE peer SET last_sync_at = ? WHERE id = ?",
+                arguments: [now.timeIntervalSince1970, peerID.uuidString])
         }
     }
 

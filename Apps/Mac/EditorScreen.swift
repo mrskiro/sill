@@ -21,13 +21,15 @@ struct EditorScreen: View {
             }
         }
         .frame(minWidth: 320, minHeight: 200)
-        .ignoresSafeArea() // the header itself occupies the transparent title-bar band
+        .ignoresSafeArea()  // the header itself occupies the transparent title-bar band
     }
 
     /// Sits in the transparent title-bar band; the empty parts still drag the window.
     private var header: some View {
         HStack(spacing: 10) {
-            Button { model.toggleSidebar() } label: {
+            Button {
+                model.toggleSidebar()
+            } label: {
                 Image(systemName: "sidebar.left")
                     .foregroundStyle(model.isSidebarVisible ? Color.accentColor : .secondary)
             }

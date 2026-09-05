@@ -45,7 +45,7 @@ public struct IdentityStore: Sendable {
         if status == errSecItemNotFound { return nil }
         try check(status, "load identity")
         guard let result, CFGetTypeID(result) == SecIdentityGetTypeID() else { throw IdentityError.identityNotFound }
-        let identity = result as! SecIdentity // type checked above
+        let identity = result as! SecIdentity  // type checked above
         var certificate: SecCertificate?
         try check(SecIdentityCopyCertificate(identity, &certificate), "copy certificate")
         guard let certificate else { throw IdentityError.identityNotFound }
@@ -94,8 +94,12 @@ public struct IdentityStore: Sendable {
             kSecAttrKeyClass: kSecAttrKeyClassPrivate,
             kSecAttrKeySizeInBits: 256,
         ]
-        guard let key = SecKeyCreateWithData(material.privateKey.x963Representation as CFData, keyAttributes as CFDictionary, &keyError) else {
-            throw IdentityError.keychain(errSecParam, "SecKeyCreateWithData: \(keyError?.takeRetainedValue().localizedDescription ?? "?")")
+        guard
+            let key = SecKeyCreateWithData(
+                material.privateKey.x963Representation as CFData, keyAttributes as CFDictionary, &keyError)
+        else {
+            throw IdentityError.keychain(
+                errSecParam, "SecKeyCreateWithData: \(keyError?.takeRetainedValue().localizedDescription ?? "?")")
         }
         var addKey = base(kSecClassKey)
         addKey[kSecValueRef] = key
@@ -107,7 +111,7 @@ public struct IdentityStore: Sendable {
     private func base(_ itemClass: CFString) -> [CFString: Any] {
         var query: [CFString: Any] = [kSecClass: itemClass, kSecAttrLabel: label]
         #if os(macOS)
-        query[kSecUseDataProtectionKeychain] = true
+            query[kSecUseDataProtectionKeychain] = true
         #endif
         return query
     }

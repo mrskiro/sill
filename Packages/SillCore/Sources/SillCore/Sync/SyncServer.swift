@@ -112,7 +112,9 @@ public actor SyncServer {
             peer = try store.peer(id: pair.deviceID)
             if let peer { eventSink.yield(.paired(peer)) }
             try await channel.send(.paired(PeerInfo(deviceID: store.deviceID, name: store.deviceName)))
-            guard case .hello(let hello)? = try await inbox.next() else { throw SyncError.unexpectedMessage("expected hello after pairing") }
+            guard case .hello(let hello)? = try await inbox.next() else {
+                throw SyncError.unexpectedMessage("expected hello after pairing")
+            }
             try await handshake(hello, peer: &peer, certificateDeviceID: certificateDeviceID, channel: channel)
         case .hello(let hello):
             try await handshake(hello, peer: &peer, certificateDeviceID: certificateDeviceID, channel: channel)
@@ -131,13 +133,14 @@ public actor SyncServer {
             case .changes(let notes):
                 pending.append(contentsOf: notes)
             case .changesDone(let clientVector):
-                let applied = try store.apply(pending, senderID: peer.id, senderName: peer.name, senderVector: clientVector)
+                let applied = try store.apply(
+                    pending, senderID: peer.id, senderName: peer.name, senderVector: clientVector)
                 pending = []
                 try await sendChanges(since: clientVector, over: channel)
                 try store.markSynced(peerID: peer.id)
                 if let synced = try store.peer(id: peer.id) { eventSink.yield(.synced(synced)) }
                 if applied.inserted + applied.overwritten + applied.conflictCopies > 0 {
-                    await poke(except: id) // other connected devices should pick this up too
+                    await poke(except: id)  // other connected devices should pick this up too
                 }
             case .bye:
                 return
@@ -169,8 +172,12 @@ public actor SyncServer {
 
     // MARK: Internals
 
-    private func handshake(_ hello: SyncMessage.Hello, peer: inout Peer?, certificateDeviceID: DeviceID, channel: any SyncChannel) async throws {
-        guard hello.protocolVersion == SyncMessage.protocolVersion else { throw SyncError.protocolVersion(hello.protocolVersion) }
+    private func handshake(
+        _ hello: SyncMessage.Hello, peer: inout Peer?, certificateDeviceID: DeviceID, channel: any SyncChannel
+    ) async throws {
+        guard hello.protocolVersion == SyncMessage.protocolVersion else {
+            throw SyncError.protocolVersion(hello.protocolVersion)
+        }
         guard hello.deviceID == certificateDeviceID, var known = peer, known.id == hello.deviceID else {
             try await channel.send(.bye("not paired"))
             throw SyncError.notPaired
@@ -180,7 +187,8 @@ public actor SyncServer {
             known.name = hello.name
             peer = known
         }
-        try await channel.send(.hello(.init(deviceID: store.deviceID, name: store.deviceName, vector: try store.vector())))
+        try await channel.send(
+            .hello(.init(deviceID: store.deviceID, name: store.deviceName, vector: try store.vector())))
     }
 
     private func sendChanges(since vector: VersionVector, over channel: any SyncChannel) async throws {

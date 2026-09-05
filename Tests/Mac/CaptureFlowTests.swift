@@ -1,7 +1,8 @@
 import AppKit
-import KeyboardShortcuts
 import SillCore
+import SillMac
 import Testing
+
 @testable import Sill
 
 /// Runs inside the real Sill process (hosted test bundle) against a throwaway database,
@@ -49,11 +50,13 @@ struct CaptureFlowTests {
 
     /// Sends a real key event through NSTextView.keyDown, the same path the keyboard uses.
     private func press(_ key: Key) throws {
-        let event = try #require(NSEvent.keyEvent(
-            with: .keyDown, location: .zero, modifierFlags: key.modifiers, timestamp: 0,
-            windowNumber: app.panel.windowNumber, context: nil,
-            characters: key.characters, charactersIgnoringModifiers: key.characters, isARepeat: false, keyCode: key.keyCode
-        ))
+        let event = try #require(
+            NSEvent.keyEvent(
+                with: .keyDown, location: .zero, modifierFlags: key.modifiers, timestamp: 0,
+                windowNumber: app.panel.windowNumber, context: nil,
+                characters: key.characters, charactersIgnoringModifiers: key.characters, isARepeat: false,
+                keyCode: key.keyCode
+            ))
         try textView().keyDown(with: event)
     }
 
@@ -149,7 +152,7 @@ struct CaptureFlowTests {
     @Test func sidebarListsNotesSwitchesAndDeletes() async throws {
         app.newNote()
         try type("first note")
-        app.newNote()                      // flushes "first note" immediately
+        app.newNote()  // flushes "first note" immediately
         try type("second note")
         try await waitForAutosave()
         let second = try #require(app.model.note)
@@ -163,7 +166,7 @@ struct CaptureFlowTests {
         #expect(app.model.note?.id == first.id)
         #expect(try textView().string == "first note")
 
-        app.deleteCurrentNote()            // no confirmation dialog in test mode
+        app.deleteCurrentNote()  // no confirmation dialog in test mode
         #expect(try app.store.note(id: first.id)?.isDeleted == true)
         #expect(app.model.note?.id == second.id)  // moved on to the most recent live note
         #expect(try textView().string == "second note")
@@ -185,7 +188,9 @@ struct CaptureFlowTests {
         var remote = open
         remote.content = "edited on the phone"
         remote.version = Version(device: phone, seq: 1)
-        try app.store.apply([remote], senderID: phone, senderName: "Phone", senderVector: VersionVector([phone: 1, app.store.deviceID: open.version.seq]))
+        try app.store.apply(
+            [remote], senderID: phone, senderName: "Phone",
+            senderVector: VersionVector([phone: 1, app.store.deviceID: open.version.seq]))
         try await waitUntil { (try? self.textView().string) == "edited on the phone" }
         #expect(app.model.note?.version == remote.version)
 
@@ -194,7 +199,9 @@ struct CaptureFlowTests {
         var newer = remote
         newer.content = "phone wrote more"
         newer.version = Version(device: phone, seq: 2)
-        try app.store.apply([newer], senderID: phone, senderName: "Phone", senderVector: VersionVector([phone: 2, app.store.deviceID: open.version.seq]))
+        try app.store.apply(
+            [newer], senderID: phone, senderName: "Phone",
+            senderVector: VersionVector([phone: 2, app.store.deviceID: open.version.seq]))
         try await waitUntil { self.app.model.notes.contains { $0.content == "phone wrote more (Conflict from Phone)" } }
         #expect(try textView().string == "edited on the phone plus local")
         try await waitForAutosave()

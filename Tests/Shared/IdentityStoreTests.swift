@@ -28,9 +28,12 @@ import Testing
         let publicKey = try #require(SecKeyCopyPublicKey(key))
         let message = Data("sill".utf8)
         var error: Unmanaged<CFError>?
-        let signatureData = SecKeyCreateSignature(key, .ecdsaSignatureMessageX962SHA256, message as CFData, &error) as Data?
+        let signatureData =
+            SecKeyCreateSignature(key, .ecdsaSignatureMessageX962SHA256, message as CFData, &error) as Data?
         let signature = try #require(signatureData)
-        #expect(SecKeyVerifySignature(publicKey, .ecdsaSignatureMessageX962SHA256, message as CFData, signature as CFData, &error))
+        #expect(
+            SecKeyVerifySignature(
+                publicKey, .ecdsaSignatureMessageX962SHA256, message as CFData, signature as CFData, &error))
     }
 
     /// A reinstall recreates the database (new device id) while the Keychain keeps the old identity.
@@ -50,6 +53,6 @@ import Testing
         _ = try store.loadOrCreate(deviceID: UUID())
         try store.delete()
         #expect(try store.load() == nil)
-        try store.delete() // idempotent
+        try store.delete()  // idempotent
     }
 }

@@ -1,7 +1,7 @@
 name: Sill
 options:
   bundleIdPrefix: com.mrskiro
-  xcodeVersion: "26.0"
+  xcodeVersion: "26.6"
   deploymentTarget:
     macOS: "26.0"
     iOS: "26.0"
@@ -21,9 +21,6 @@ settings:
 packages:
   SillCore:
     path: Packages/SillCore
-  KeyboardShortcuts:
-    url: https://github.com/sindresorhus/KeyboardShortcuts
-    from: 3.0.1
 targets:
   Sill:
     type: application
@@ -33,7 +30,9 @@ targets:
         type: syncedFolder
     dependencies:
       - package: SillCore
-      - package: KeyboardShortcuts
+        product: SillCore
+      - package: SillCore
+        product: SillMac
     settings:
       base:
         PRODUCT_NAME: Sill
@@ -76,8 +75,7 @@ targets:
       - path: Tests/Shared
         type: syncedFolder
     dependencies:
-      - target: Sill
-      - package: KeyboardShortcuts
+      - target: Sill # hosted tests use the modules the app already links (SillCore, SillMac)
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

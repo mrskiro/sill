@@ -23,8 +23,10 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Select Xcode 26.6
-        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+      - name: Select the newest Xcode 26
+        run: |
+          XCODE=$(find /Applications -maxdepth 1 -name 'Xcode_26.*.app' | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE" && xcodebuild -version
 
       - name: Install XcodeGen and generate project
         run: brew install xcodegen && make gen
@@ -93,11 +95,14 @@ jobs:
           xcrun stapler staple Sill.app
           rm "Sill-${GITHUB_REF_NAME#v}.zip"
           ditto -c -k --keepParent Sill.app "Sill-${GITHUB_REF_NAME#v}.zip"
+          shasum -a 256 "Sill-${GITHUB_REF_NAME#v}.zip" > "Sill-${GITHUB_REF_NAME#v}.zip.sha256"
           spctl -a -vv -t install Sill.app
 
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/export/Sill-${GITHUB_REF_NAME#v}.zip" \
+          gh release create "$GITHUB_REF_NAME" \
+            "$RUNNER_TEMP/export/Sill-${GITHUB_REF_NAME#v}.zip" \
+            "$RUNNER_TEMP/export/Sill-${GITHUB_REF_NAME#v}.zip.sha256" \
             --title "Sill $GITHUB_REF_NAME" --generate-notes
