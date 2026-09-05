@@ -5,7 +5,7 @@
 ## 原則
 
 - ミニマル最優先。MVP 要件を満たす最も単純な案を選び、機能を足す前に設計書の決定事項を確認する。
-- 公開リポジトリ前提。個人のパス、メール、チーム ID、端末 UDID、環境固有の値を追跡ファイルに入れない。コミット前に `make hygiene`。
+- 公開リポジトリ前提。個人のパス、メール、チーム ID、端末 UDID、環境固有の値を追跡ファイルに入れない。`make hygiene` は未追跡ファイルも見るので、コミット前に必ず通す。CI でも同じ走査が走る。
 - UI 文言は英語で統一（ロケール依存の月名・日付も英語固定）。
 - 自己レビューはしない。品質判断が要るときは `/review`（Codex + ペルソナ）にかける。
 - main へ直接 push しない（`.claude/hooks` がブロック）。ブランチ → PR → CI 緑 → squash merge。
@@ -19,7 +19,7 @@
 
 ## 落とし穴
 
-- `xcode-select` が CommandLineTools を向いている環境では `DEVELOPER_DIR=/Applications/Xcode-26.6.0.app/Contents/Developer` を付けるか `sudo xcode-select -s` する。
+- `xcode-select -p` が CommandLineTools を向いている環境では、`DEVELOPER_DIR` に Xcode 26.6 以上の `Contents/Developer` を渡すか `sudo xcode-select -s <Xcode.app>` する。
 - ホスト型テストは `SILL_TEST_MODE=1`（使い捨て DB、Mac はパネルが key にならず accessory ポリシー）。osascript でキー入力を送らない（Accessibility 権限が無く、ユーザーの入力を奪う）。
 - Mac のテストバンドルに `SillMac` パッケージ製品を直接リンクさせない（Xcode の package framework 生成で失敗する）。ホストアプリのモジュールを使う。
 - Mac の署名は team 署名 + `keychain-access-groups`（data protection keychain）が必要。`-allowProvisioningUpdates -allowProvisioningDeviceRegistration` は Makefile に入っている。Xcode のアカウントが "rejected" になったら Xcode › Settings › Accounts で再サインイン。
