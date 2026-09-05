@@ -6,7 +6,8 @@ import Testing
 /// Randomised multi-device simulation. Properties checked after a full sweep:
 /// 1. every replica ends with the same live notes,
 /// 2. no text a user wrote is lost unless a later edit was made with knowledge of it.
-@Suite struct SyncSimulationTests {
+@Suite(.serialized) // CPU-heavy: keep it from starving the concurrent session tests on small CI runners
+struct SyncSimulationTests {
     struct UserWrite {
         let noteID: UUID
         let content: String?  // nil for a delete

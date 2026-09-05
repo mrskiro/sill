@@ -41,7 +41,8 @@ import Testing
         }
     }
 
-    private func waitUntil(timeout: Duration = .seconds(3), _ condition: () async throws -> Bool) async throws {
+    // Generous: CI runners have few cores and the simulation suite competes for them.
+    private func waitUntil(timeout: Duration = .seconds(10), _ condition: () async throws -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
         while try await !condition() {
             try #require(ContinuousClock.now < deadline, "timed out")
@@ -200,7 +201,8 @@ import Testing
         _ = phoneEnd
         let started = ContinuousClock.now
         try await serving.value
-        #expect(ContinuousClock.now - started < .seconds(2))
+        // Returned on its own (the timeout is 50 ms); the bound only guards against hanging.
+        #expect(ContinuousClock.now - started < .seconds(10))
         #expect(await server.connectionCount == 0)
     }
 
