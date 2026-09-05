@@ -1,0 +1,103 @@
+# Tag `vX.Y.Z` → notarized macOS build attached to a GitHub Release.
+#
+# Not exercised until these repository secrets exist (Settings › Secrets and variables › Actions):
+#   APPLE_TEAM_ID                 e.g. ABCDE12345
+#   ASC_KEY_ID / ASC_ISSUER_ID    App Store Connect API key (Developer role is enough for notarization)
+#   ASC_API_KEY_P8                the .p8 contents, base64-encoded
+#   MACOS_CERTIFICATE_P12         "Developer ID Application" certificate + key, .p12 base64-encoded
+#   MACOS_CERTIFICATE_PASSWORD    password of that .p12
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  macos:
+    name: macOS (Developer ID, notarized)
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app
+
+      - name: Install XcodeGen and generate project
+        run: brew install xcodegen && make gen
+
+      - name: Import Developer ID certificate into a temporary keychain
+        env:
+          P12_BASE64: ${{ secrets.MACOS_CERTIFICATE_P12 }}
+          P12_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(uuidgen)"
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 1800 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          rm "$RUNNER_TEMP/cert.p12"
+
+      - name: App Store Connect API key
+        env:
+          ASC_API_KEY_P8: ${{ secrets.ASC_API_KEY_P8 }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          echo "$ASC_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey.p8"
+
+      - name: Archive and export (Developer ID)
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          xcodebuild -project Sill.xcodeproj -scheme Sill -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/Sill.xcarchive" -quiet \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
+            archive
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>developer-id</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>signingStyle</key><string>automatic</string>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Sill.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" -quiet \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Notarize and staple
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          cd "$RUNNER_TEMP/export"
+          ditto -c -k --keepParent Sill.app "Sill-${GITHUB_REF_NAME#v}.zip"
+          xcrun notarytool submit "Sill-${GITHUB_REF_NAME#v}.zip" \
+            --key "$RUNNER_TEMP/asc/AuthKey.p8" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait
+          xcrun stapler staple Sill.app
+          rm "Sill-${GITHUB_REF_NAME#v}.zip"
+          ditto -c -k --keepParent Sill.app "Sill-${GITHUB_REF_NAME#v}.zip"
+          spctl -a -vv -t install Sill.app
+
+      - name: GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "$RUNNER_TEMP/export/Sill-${GITHUB_REF_NAME#v}.zip" \
+            --title "Sill $GITHUB_REF_NAME" --generate-notes

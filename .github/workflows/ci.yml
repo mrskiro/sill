@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & test (macOS 26, Xcode 26.6)
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select -s /Applications/Xcode_26.6.app && xcodebuild -version
+
+      - name: Repository hygiene (no personal paths, keys or identifiers)
+        run: scripts/hygiene-check.sh
+
+      - name: Cache SwiftPM
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ~/Library/Caches/org.swift.swiftpm
+            Packages/SillCore/.build
+            ~/Library/Developer/Xcode/DerivedData/**/SourcePackages
+          key: swiftpm-${{ runner.os }}-${{ hashFiles('Packages/SillCore/Package.resolved') }}
+          restore-keys: swiftpm-${{ runner.os }}-
+
+      - name: SillCore tests (store, sync engine, editing, certificates)
+        run: swift test --parallel
+        working-directory: Packages/SillCore
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate project
+        run: make gen
+
+      # App targets are compiled without signing: the hosted tests need a signed app
+      # (data-protection keychain) and real devices, so they run locally via `make test`.
+      - name: Build macOS app
+        run: |
+          xcodebuild -project Sill.xcodeproj -scheme Sill -destination 'platform=macOS' \
+            -quiet CODE_SIGNING_ALLOWED=NO build
+
+      - name: Build iOS app (simulator)
+        run: |
+          xcodebuild -project Sill.xcodeproj -scheme SillPhone -destination 'generic/platform=iOS Simulator' \
+            -quiet CODE_SIGNING_ALLOWED=NO build
