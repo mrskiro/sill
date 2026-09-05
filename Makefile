@@ -1,10 +1,14 @@
 PROJECT = Sill.xcodeproj
 
-.PHONY: gen build build-mac build-ios test test-core test-mac test-ios hygiene format lint device-check clean
+.PHONY: gen icons build build-mac build-ios test test-core test-mac test-ios hygiene format lint device-check clean
 
 gen:
 	@test -f Configs/Local.xcconfig || cp Configs/Local.xcconfig.example Configs/Local.xcconfig
 	xcodegen generate --spec project.yml --quiet
+
+# Redraws both Assets.xcassets from the parametric spec in the script.
+icons:
+	swift scripts/make-app-icon.swift
 
 build: build-mac build-ios
 
