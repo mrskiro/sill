@@ -352,10 +352,18 @@ sill/
 
 テスト方針: SillCore は `swift test`（同期セッションはメモリ内チャネルで、識別は swift-certificates の証明書で検証）。実機は `scripts/device-sync-check.sh`: Mac を `SILL_DEBUG=1` で起動して `sill://debug/...` で操作し、iPhone は `devicectl` の環境変数でノートを作らせ、両 DB（iPhone 側は `devicectl device copy from` で取得）で到達を確認する。両アプリは `Application Support/Sill/sync.log` に同期の経過を残す。ホスト型テストでは 127.0.0.1 上で本物の相互 TLS（pinning）を張り、アプリの listener / client と結合した端末間フローまで通す。Mac の UI 挙動は Sill.app 内で動くホスト型テスト（`Tests/Mac`）で、NSTextView に実際のキーイベントを流して検証する。iOS も同様に simulator 上の Sill.app 内で動くホスト型テスト（`Tests/iOS`）で、UITextView の `insertText` 経路（実キーボードと同じ）を通す。`SILL_TEST_MODE=1` で使い捨て DB を使い、Mac ではパネルが key にならず accessory ポリシーで起動する（他アプリへの入力を奪わない）。XcodeGen の sources は `syncedFolder` にしてあり、ファイル追加で再生成は不要。
 
-## 15. 次にやること
+## 15. 次にやること（2026-09-05 時点の引き継ぎ）
 
-- **iOS の書式ツールバー**: 純正メモのようにキーボード上部に「箇条書き / 番号付き / チェックボックス / 太字 / 斜体 / コード / 見出し / インデント」を並べ、Markdown 記法を挿入・トグルする。本文は Markdown 文字列のまま（リッチテキスト化はしない）。`MarkdownEditing` に純関数として追加し、Mac のメニューからも同じ関数を呼ぶ。
-- autosave ロジック（Mac `EditorModel` / iOS `NoteDraft`）の統合判断。
+決定待ち（オーナー）:
+- **公開の切り替え**（private → public）。public にしたら branch protection を API で入れる（force push 禁止、linear history、admin にも適用）。
+- **Release の Secrets**（Developer ID 証明書 p12、App Store Connect API キー、Team ID）。入れたら `v0.1.0` タグで初回リリースを試し、公証まで通す。
+- **LICENSE の名義**（現状 MIT / mrskiro）。
+- **README の言語**（現状日本語。英語版にするか）。
+
+実装:
+- **iOS の書式ツールバー**（最後に回す指示あり）: 純正メモのようにキーボード上部に「箇条書き / 番号付き / チェックボックス / 太字 / 斜体 / コード / 見出し / インデント」を並べ、Markdown 記法を挿入・トグルする。本文は Markdown 文字列のまま。`MarkdownEditing` に純関数として追加し、Mac のメニューからも同じ関数を呼ぶ。
+- iOS の実機で `PhoneSync` の再接続ループとローカルネットワーク許可の挙動を長時間（数日）観察する。Scenario E の実運用確認。
+- Sync 状態の UI（Mac ヘッダー / iOS 下部バー）の文言と更新頻度の見直し。
 
 ## 16. 将来の拡張方向（設計上の制約として意識するもの。MVP では作らない）
 
