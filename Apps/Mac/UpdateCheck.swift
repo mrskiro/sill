@@ -5,7 +5,14 @@ import SillCore
 /// Sill has no background updater, so this is the whole update story on the Mac.
 @MainActor
 enum UpdateCheck {
+    /// `runModal()` keeps draining the main actor, so a second pick while the first request is in
+    /// flight would stack a second alert on top of the first.
+    private static var isChecking = false
+
     static func run() async {
+        guard !isChecking else { return }
+        isChecking = true
+        defer { isChecking = false }
         let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
         do {
             let tag = try await latestTag()
@@ -21,6 +28,21 @@ enum UpdateCheck {
         }
     }
 
+    /// The alert shows `localizedDescription`, so every case here has to read as a sentence.
+    private enum CheckError: LocalizedError {
+        case noRelease
+        case rateLimited
+        case status(Int)
+
+        var errorDescription: String? {
+            switch self {
+            case .noRelease: "No release has been published yet."
+            case .rateLimited: "GitHub is rate limiting update checks. Try again in a while."
+            case .status(let code): "GitHub returned HTTP \(code)."
+            }
+        }
+    }
+
     private struct Release: Decodable {
         let tagName: String
 
@@ -33,8 +55,13 @@ enum UpdateCheck {
         var request = URLRequest(url: Support.latestReleaseAPIURL)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let http = response as? HTTPURLResponse, http.statusCode == 200 else {
-            throw URLError(.badServerResponse)
+        guard let http = response as? HTTPURLResponse else { throw URLError(.badServerResponse) }
+        switch http.statusCode {
+        case 200: break
+        // Unauthenticated requests are capped per IP, and a repo with no release yet answers 404.
+        case 403, 429: throw CheckError.rateLimited
+        case 404: throw CheckError.noRelease
+        default: throw CheckError.status(http.statusCode)
         }
         return try JSONDecoder().decode(Release.self, from: data).tagName
     }
