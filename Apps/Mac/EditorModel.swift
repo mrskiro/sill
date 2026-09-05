@@ -132,10 +132,15 @@ final class EditorModel {
         text = current
         do {
             if let existing = note {
-                if existing.content != current, let updated = try store.updateNote(id: existing.id, content: current) {
-                    note = updated
-                    log.debug("flush: updated note length=\(current.count)")
-                    onSaved?()
+                if let result = try store.saveEdit(id: existing.id, text: current, expecting: existing.version) {
+                    let changed = result.note.version != existing.version || result.copiedAside != nil
+                    note = result.note
+                    if let copied = result.copiedAside {
+                        log.notice("kept local edits; copied remote version of \(existing.id) aside as \(copied.id)")
+                    }
+                    if changed { onSaved?() }
+                } else {
+                    note = nil
                 }
             } else if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 note = try store.createNote(content: current)
@@ -153,8 +158,8 @@ final class EditorModel {
         setText(note.content)
     }
 
-    /// Sync changed the note that is open: show it, or keep typing and copy the remote text aside.
-    /// Never lets a later local save silently erase what another device wrote.
+    /// Sync changed the note that is open: show it when the editor is clean. A dirty editor keeps
+    /// typing; `saveEdit` copies the replaced text aside when the local text is saved.
     private func reconcileOpenNote() {
         guard let open = note else { return }
         let current = try? store.note(id: open.id)
@@ -168,14 +173,6 @@ final class EditorModel {
             note = nil
             setText("")
             if let next = try? store.lastEditedNote() { load(next) }
-        case .keepLocalAndCopyRemote(let latest):
-            let peerName = (try? store.peer(id: latest.version.device))?.name ?? "another device"
-            if !latest.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                _ = try? store.createNote(content: NoteTitle.markingConflict(in: latest.content, from: peerName))
-                onSaved?()
-            }
-            note = latest // the next flush writes the local text as a version on top of it
-            log.notice("kept local edits; copied remote version of \(open.id) aside")
         }
     }
 

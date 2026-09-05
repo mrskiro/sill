@@ -34,9 +34,9 @@ import Testing
         }
     }
 
-    private func waitUntil(timeout: Duration = .seconds(3), _ condition: () throws -> Bool) async throws {
+    private func waitUntil(timeout: Duration = .seconds(3), _ condition: () async throws -> Bool) async throws {
         let deadline = ContinuousClock.now + timeout
-        while try !condition() {
+        while try await !condition() {
             try #require(ContinuousClock.now < deadline, "timed out")
             try await Task.sleep(for: .milliseconds(10))
         }
@@ -190,6 +190,41 @@ import Testing
         try await serving.value
         #expect(ContinuousClock.now - started < .seconds(2))
         #expect(await server.connectionCount == 0)
+    }
+
+    @Test func unpairingEndsTheLiveSession() async throws {
+        let pair = try Pair()
+        try pair.pairDirectly()
+        let session = pair.connect()
+        try await waitUntil { await pair.server.connectionCount == 1 }
+        try pair.mac.store.removePeer(id: pair.phone.id)
+        await pair.server.revoke(peerID: pair.phone.id)
+        _ = try? await session.server.value
+        _ = try? await session.client.value
+        #expect(await pair.server.connectionCount == 0)
+    }
+
+    @Test func aBatchFromOnePhoneReachesAnotherConnectedPhone() async throws {
+        let mac = try Replica("Mac"), a = try Replica("Phone A"), b = try Replica("Phone B")
+        let server = SyncServer(store: mac.store)
+        let macCert = try DeviceCertificate.generate(deviceID: mac.id)
+        var clients: [SyncClient] = []
+        for phone in [a, b] {
+            let cert = try DeviceCertificate.generate(deviceID: phone.id)
+            try mac.store.addPeer(id: phone.id, name: phone.name, fingerprint: cert.fingerprint)
+            try phone.store.addPeer(id: mac.id, name: "Mac", fingerprint: macCert.fingerprint)
+            let (macEnd, phoneEnd) = InMemoryChannel.pair()
+            macEnd.peerCertificateDER = cert.certificateDER
+            phoneEnd.peerCertificateDER = macCert.certificateDER
+            Task { try await server.serve(macEnd) }
+            let client = SyncClient(store: phone.store)
+            Task { try await client.session(phoneEnd) }
+            clients.append(client)
+        }
+        try await waitUntil { await server.connectionCount == 2 }
+        let note = try a.store.createNote(content: "from A")
+        await clients[0].localChanged()
+        try await waitUntil { try b.store.note(id: note.id)?.content == "from A" }
     }
 
     @Test func helloFromAnUnpairedClientEndsTheSessionCleanly() async throws {

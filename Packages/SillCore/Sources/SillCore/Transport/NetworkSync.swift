@@ -181,19 +181,26 @@ public enum SillConnector {
         }
     }
 
-    /// Browses (including peer-to-peer Wi-Fi) until a Sill service with the given fingerprint prefix appears.
-    public static func findServer(fingerprintPrefix: String) async throws -> NWEndpoint {
+    /// Browses (including peer-to-peer Wi-Fi) until a Sill service advertising one of the given
+    /// fingerprint prefixes appears; with several paired Macs, whichever is nearby wins.
+    public static func findServer(fingerprintPrefixes: Set<String>) async throws -> NWEndpoint {
         let parameters = NWParameters()
         parameters.includePeerToPeer = true
-        SyncLog.write("browse for fp=\(fingerprintPrefix)")
+        SyncLog.write("browse for fp in \(fingerprintPrefixes.sorted())")
         return try await NetworkBrowser(for: .bonjour(SillService.type, includeTxtRecord: true), using: parameters)
             .onStateUpdate { _, state in SyncLog.write("browser state \(String(describing: state))") }
             .run { endpoints in
                 SyncLog.write("browse results: \(endpoints.map { "\($0.name) fp=\($0.txtRecord[SillService.fingerprintKey] ?? "-")" })")
-                if let match = endpoints.first(where: { $0.txtRecord[SillService.fingerprintKey] == fingerprintPrefix }) {
+                if let match = endpoints.first(where: { endpoint in
+                    endpoint.txtRecord[SillService.fingerprintKey].map(fingerprintPrefixes.contains) ?? false
+                }) {
                     return .finish(match.nwEndpoint)
                 }
                 return .continue
             }
+    }
+
+    public static func findServer(fingerprintPrefix: String) async throws -> NWEndpoint {
+        try await findServer(fingerprintPrefixes: [fingerprintPrefix])
     }
 }

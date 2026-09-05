@@ -56,6 +56,8 @@ targets:
       path: Apps/Mac/Info.plist
       properties:
         CFBundleDisplayName: Sill
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.productivity
         NSLocalNetworkUsageDescription: Sill syncs your notes directly with your paired iPhone over the local network.
         NSBonjourServices:
@@ -105,6 +107,8 @@ targets:
       path: Apps/iOS/Info.plist
       properties:
         CFBundleDisplayName: Sill
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait

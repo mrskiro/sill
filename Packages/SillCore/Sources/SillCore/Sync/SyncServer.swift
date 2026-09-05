@@ -9,6 +9,7 @@ public actor SyncServer {
     private var pairingToken: Data?
     private var pairingExpiresAt: ContinuousClock.Instant?
     private var channels: [UUID: any SyncChannel] = [:]
+    private var peerByChannel: [UUID: DeviceID] = [:]
     private let log = Logger(subsystem: "com.mrskiro.sill", category: "sync-server")
 
     /// UI-facing notifications.
@@ -80,6 +81,7 @@ public actor SyncServer {
         eventSink.yield(.connections(channels.count))
         defer {
             channels[id] = nil
+            peerByChannel[id] = nil
             channel.close()
             eventSink.yield(.connections(channels.count))
         }
@@ -118,6 +120,7 @@ public actor SyncServer {
             throw SyncError.unexpectedMessage("expected pair or hello")
         }
         guard let peer else { throw SyncError.notPaired }
+        peerByChannel[id] = peer.id
         watchdog.cancel()
         log.info("session with \(peer.name, privacy: .public)")
         SyncLog.write("server: session with \(peer.name)")
@@ -128,11 +131,14 @@ public actor SyncServer {
             case .changes(let notes):
                 pending.append(contentsOf: notes)
             case .changesDone(let clientVector):
-                try store.apply(pending, senderID: peer.id, senderName: peer.name, senderVector: clientVector)
+                let applied = try store.apply(pending, senderID: peer.id, senderName: peer.name, senderVector: clientVector)
                 pending = []
                 try await sendChanges(since: clientVector, over: channel)
                 try store.markSynced(peerID: peer.id)
                 if let synced = try store.peer(id: peer.id) { eventSink.yield(.synced(synced)) }
+                if applied.inserted + applied.overwritten + applied.conflictCopies > 0 {
+                    await poke(except: id) // other connected devices should pick this up too
+                }
             case .bye:
                 return
             case .hello, .pair, .paired, .poke:
@@ -143,8 +149,19 @@ public actor SyncServer {
 
     /// Tells every connected client to start a round (called after local writes).
     public func poke() async {
-        for channel in channels.values {
+        await poke(except: nil)
+    }
+
+    private func poke(except excluded: UUID?) async {
+        for (id, channel) in channels where id != excluded {
             try? await channel.send(.poke)
+        }
+    }
+
+    /// Ends every session of a device that is no longer trusted (unpairing).
+    public func revoke(peerID: DeviceID) {
+        for (id, device) in peerByChannel where device == peerID {
+            channels[id]?.close()
         }
     }
 

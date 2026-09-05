@@ -22,10 +22,10 @@ import Testing
         #expect(OpenNoteReconciliation.decide(open: open, editorText: "base typed", current: open) == .unchanged)
     }
 
-    @Test func dirtyEditorKeepsTypingAndCopiesTheRemoteTextAside() {
+    @Test func dirtyEditorKeepsTypingAndLeavesTheMergeToSave() {
         let open = note("base", device: mac, seq: 1)
         let remote = note("remote edit", device: phone, seq: 4)
-        #expect(OpenNoteReconciliation.decide(open: open, editorText: "base typed", current: remote) == .keepLocalAndCopyRemote(remote))
+        #expect(OpenNoteReconciliation.decide(open: open, editorText: "base typed", current: remote) == .unchanged)
     }
 
     @Test func dirtyEditorThatAlreadyMatchesTheRemoteJustReloads() {

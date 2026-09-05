@@ -92,6 +92,7 @@ final class MacSync {
     func unpair(_ id: DeviceID) {
         try? store.removePeer(id: id)
         refreshPeers()
+        Task { [server] in await server.revoke(peerID: id) }
     }
 
     var statusText: String {

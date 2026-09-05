@@ -22,10 +22,13 @@ public struct IdentityStore: Sendable {
         self.label = label
     }
 
-    /// Returns the stored identity, creating and storing a new one on first use.
+    /// Returns the stored identity, creating and storing a new one on first use. An identity
+    /// left behind by a previous install (Keychain items outlive the app's database) is replaced,
+    /// because peers bind the certificate to the device id it names.
     public func loadOrCreate(deviceID: DeviceID) throws -> DeviceIdentity {
         if let existing = try load() {
-            return existing
+            if existing.deviceID == deviceID { return existing }
+            try delete()
         }
         let generated = try DeviceCertificate.generate(deviceID: deviceID)
         try store(generated)

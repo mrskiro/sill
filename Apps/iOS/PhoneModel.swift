@@ -125,7 +125,7 @@ final class PhoneModel {
     /// Sync changed a note that is open in an editor.
     private func reconcileDrafts() {
         for draft in drafts.values {
-            draft.reconcile(peerName: { [store] device in (try? store.peer(id: device))?.name ?? "another device" })
+            draft.reconcile()
         }
     }
 
@@ -162,7 +162,7 @@ final class NoteDraft: Identifiable {
     }
 
     /// See `OpenNoteReconciliation`: show a synced version, or keep typing and copy it aside.
-    func reconcile(peerName: (DeviceID) -> String) {
+    func reconcile() {
         guard let open = note else { return }
         let current = try? store.note(id: open.id)
         switch OpenNoteReconciliation.decide(open: open, editorText: text, current: current) {
@@ -174,12 +174,6 @@ final class NoteDraft: Identifiable {
         case .deletedRemotely:
             note = nil
             text = ""
-        case .keepLocalAndCopyRemote(let latest):
-            if !latest.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                _ = try? store.createNote(content: NoteTitle.markingConflict(in: latest.content, from: peerName(latest.version.device)))
-                onSaved?()
-            }
-            note = latest
         }
     }
 
@@ -188,9 +182,12 @@ final class NoteDraft: Identifiable {
         saveTask = nil
         do {
             if let existing = note {
-                if existing.content != text, let updated = try store.updateNote(id: existing.id, content: text) {
-                    note = updated
-                    onSaved?()
+                if let result = try store.saveEdit(id: existing.id, text: text, expecting: existing.version) {
+                    let changed = result.note.version != existing.version || result.copiedAside != nil
+                    note = result.note
+                    if changed { onSaved?() }
+                } else {
+                    note = nil
                 }
             } else if !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 note = try store.createNote(content: text)

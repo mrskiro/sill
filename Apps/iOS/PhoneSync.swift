@@ -39,6 +39,7 @@ final class PhoneSync {
     var endpointOverride: NWEndpoint?
 
     @ObservationIgnored private var loopTask: Task<Void, Never>?
+    @ObservationIgnored private var loopGeneration = 0
     @ObservationIgnored private var eventTask: Task<Void, Never>?
     @ObservationIgnored private var pendingPairing: PairingPayload?
     @ObservationIgnored private let log = Logger(subsystem: "com.mrskiro.sill", category: "phone-sync")
@@ -56,7 +57,9 @@ final class PhoneSync {
     /// Foreground: run the connect loop.
     func start() {
         guard loopTask == nil else { return }
-        loopTask = Task { await self.run() }
+        loopGeneration += 1
+        let generation = loopGeneration
+        loopTask = Task { await self.run(generation: generation) }
     }
 
     /// Background: drop the connection; the Mac cannot reach us anyway.
@@ -89,14 +92,17 @@ final class PhoneSync {
 
     // MARK: - Internals
 
-    private func run() async {
+    private func run(generation: Int) async {
+        // Only the loop that still owns `loopTask` may clear it; a restarted loop must not be clobbered.
+        defer { if loopGeneration == generation { loopTask = nil } }
         var backoff: Duration = .seconds(1)
         while !Task.isCancelled {
             let pairing = pendingPairing
             pendingPairing = nil
-            guard let target = pairing?.fingerprint ?? peers.first?.fingerprint else {
+            let targets: Set<String> = pairing.map { [SillService.fingerprintPrefix($0.fingerprint)] }
+                ?? Set(peers.map { SillService.fingerprintPrefix($0.fingerprint) })
+            guard !targets.isEmpty else {
                 status = .unpaired
-                loopTask = nil
                 return
             }
             status = pairing == nil ? .searching : .pairing
@@ -105,7 +111,7 @@ final class PhoneSync {
                 if let endpointOverride {
                     endpoint = endpointOverride
                 } else {
-                    endpoint = try await SillConnector.findServer(fingerprintPrefix: SillService.fingerprintPrefix(target))
+                    endpoint = try await SillConnector.findServer(fingerprintPrefixes: targets)
                 }
                 try await SillConnector.connect(
                     to: endpoint, identity: identity, client: client,
@@ -119,12 +125,11 @@ final class PhoneSync {
                 log.error("session failed: \(error)")
                 status = .failed(pairing == nil ? error.localizedDescription : "pairing rejected")
                 refreshPeers()
-                if peers.isEmpty { loopTask = nil; return }
+                if peers.isEmpty { return }
             }
             try? await Task.sleep(for: backoff)
             backoff = min(backoff * 2, .seconds(30))
         }
-        loopTask = nil
         if case .connected = status { status = .searching }
     }
 

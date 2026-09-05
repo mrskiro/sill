@@ -99,6 +99,49 @@ import Testing
         #expect(snapshot.vector == (try store.vector()))
     }
 
+    @Test func saveEditWritesOnTopOfTheExpectedVersion() throws {
+        let (_, store) = try makeStore()
+        let note = try store.createNote(content: "base", now: t0)
+        let result = try #require(try store.saveEdit(id: note.id, text: "base typed", expecting: note.version, now: t1))
+        #expect(result.note.content == "base typed")
+        #expect(result.note.version.seq == 2)
+        #expect(result.copiedAside == nil)
+        // Same text again: no new version.
+        #expect(try store.saveEdit(id: note.id, text: "base typed", expecting: result.note.version)?.note.version.seq == 2)
+    }
+
+    @Test func saveEditPreservesAVersionThatArrivedUnderneathTheEditor() throws {
+        let (_, store) = try makeStore()
+        let phone = UUID()
+        try store.addPeer(id: phone, name: "Phone", fingerprint: Data(repeating: 1, count: 32))
+        let note = try store.createNote(content: "base", now: t0)
+        // Sync replaces the note while the editor still holds version 1.
+        var remote = note
+        remote.content = "phone wrote this"
+        remote.version = Version(device: phone, seq: 1)
+        try store.apply([remote], senderID: phone, senderName: "Phone", senderVector: VersionVector([phone: 1, store.deviceID: 1]))
+
+        let result = try #require(try store.saveEdit(id: note.id, text: "base typed", expecting: note.version, now: t2))
+        #expect(result.note.content == "base typed")
+        #expect(result.note.version.device == store.deviceID)
+        #expect(result.copiedAside?.content == "phone wrote this (Conflict from Phone)")
+        #expect(try store.liveNotes().count == 2)
+
+        // Saving again with the now-current version copies nothing more.
+        let again = try #require(try store.saveEdit(id: note.id, text: "base typed more", expecting: result.note.version, now: t2))
+        #expect(again.copiedAside == nil)
+    }
+
+    @Test func saveEditRevivesADeletedNote() throws {
+        let (_, store) = try makeStore()
+        let note = try store.createNote(content: "keep", now: t0)
+        let deleted = try #require(try store.deleteNote(id: note.id, now: t1))
+        let result = try #require(try store.saveEdit(id: note.id, text: "keep typing", expecting: note.version, now: t2))
+        #expect(result.note.isDeleted == false)
+        #expect(result.copiedAside == nil)
+        #expect(result.note.version.seq > deleted.version.seq)
+    }
+
     @Test func deviceIdentityPersistsAcrossReopen() throws {
         let (db, first) = try makeStore(name: "Mac")
         let second = try NoteStore(database: db, deviceName: "Mac renamed")
