@@ -176,6 +176,8 @@ public actor SyncServer {
         _ hello: SyncMessage.Hello, peer: inout Peer?, certificateDeviceID: DeviceID, channel: any SyncChannel
     ) async throws {
         guard hello.protocolVersion == SyncMessage.protocolVersion else {
+            // Say so before hanging up: a bare close reads as "not paired" at the other end.
+            try? await channel.send(.bye(SyncMessage.versionByeReason))
             throw SyncError.protocolVersion(hello.protocolVersion)
         }
         guard hello.deviceID == certificateDeviceID, var known = peer, known.id == hello.deviceID else {

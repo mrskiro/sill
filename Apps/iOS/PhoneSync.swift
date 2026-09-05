@@ -122,6 +122,16 @@ final class PhoneSync {
                 status = .searching
             } catch is CancellationError {
                 break
+            } catch let error as SyncError where error.isUnrecoverable {
+                // A version mismatch cannot be retried away. Stop the loop and say why; the next
+                // foreground (or an app update) starts it again.
+                log.error("session failed for good: \(error)")
+                SyncLog.write("phone: not retrying: \(error)")
+                // Pairing may have stored the Mac just before the mismatch; without this the peer
+                // is missing from the unpair list and the next foreground has nothing to dial.
+                refreshPeers()
+                status = .failed(error.localizedDescription)
+                return
             } catch {
                 log.error("session failed: \(error)")
                 status = .failed(pairing == nil ? error.localizedDescription : "pairing rejected")
