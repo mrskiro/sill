@@ -81,6 +81,24 @@ import Testing
         #expect(try store.changes(since: store.vector()).isEmpty)
     }
 
+    @Test func aVersionCanNeverBeStoredTwice() throws {
+        let (_, store) = try makeStore()
+        let note = try store.createNote(content: "one", now: t0)
+        let duplicate = Note(id: UUID(), content: "same version, different note", createdAt: t0, updatedAt: t0, version: note.version)
+        // The schema itself refuses a second row with an existing (device, seq), whatever the code above it does.
+        #expect(throws: (any Error).self) {
+            try store.writer.write { db in try NoteRecord(duplicate).insert(db) }
+        }
+    }
+
+    @Test func changesSnapshotPairsNotesWithTheirVector() throws {
+        let (_, store) = try makeStore()
+        try store.createNote(content: "a", now: t0)
+        let snapshot = try store.changesSnapshot(since: VersionVector())
+        #expect(snapshot.notes.count == 1)
+        #expect(snapshot.vector == (try store.vector()))
+    }
+
     @Test func deviceIdentityPersistsAcrossReopen() throws {
         let (db, first) = try makeStore(name: "Mac")
         let second = try NoteStore(database: db, deviceName: "Mac renamed")

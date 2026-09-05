@@ -42,7 +42,7 @@ func sillStack(identity: DeviceIdentity, policy: FingerprintPolicy) -> NWParamet
         Coder(SyncMessage.self, using: .json) {
             TLS()
                 .peerAuthentication(.required)
-                .localIdentity(sec_identity_create(identity.secIdentity)!)
+                .localIdentity(identity.tlsIdentity)
                 .certificateValidator { _, trust in await policy.validate(trust) }
         }
     }
@@ -50,43 +50,46 @@ func sillStack(identity: DeviceIdentity, policy: FingerprintPolicy) -> NWParamet
 }
 
 /// Wraps a live connection as a `SyncChannel`. The peer certificate is taken from the TLS
-/// metadata that arrives with the first message.
+/// metadata that arrives with the first message. `close()` ends `incoming`, which makes the
+/// session return and, with it, the task that owns the connection.
 public final class NetworkSyncChannel: SyncChannel, @unchecked Sendable {
     private let connection: NetworkConnection<SillProtocol>
     private let lock = NSLock()
     private var certificate: Data?
+    public let incoming: AsyncThrowingStream<SyncMessage, any Error>
+    private let continuation: AsyncThrowingStream<SyncMessage, any Error>.Continuation
+    private var pump: Task<Void, Never>?
 
     public init(_ connection: NetworkConnection<SillProtocol>) {
         self.connection = connection
+        let (stream, continuation) = AsyncThrowingStream<SyncMessage, any Error>.makeStream()
+        incoming = stream
+        self.continuation = continuation
+        pump = Task { [weak self, connection] in
+            do {
+                for try await (content, metadata) in connection.messages {
+                    self?.recordCertificate(from: metadata)
+                    continuation.yield(content)
+                }
+                continuation.finish()
+            } catch {
+                continuation.finish(throwing: error)
+            }
+        }
     }
 
     public func send(_ message: SyncMessage) async throws {
         try await connection.send(message)
     }
 
-    public var incoming: AsyncThrowingStream<SyncMessage, any Error> {
-        AsyncThrowingStream { continuation in
-            let task = Task { [connection] in
-                do {
-                    for try await (content, metadata) in connection.messages {
-                        self.recordCertificate(from: metadata)
-                        continuation.yield(content)
-                    }
-                    continuation.finish()
-                } catch {
-                    continuation.finish(throwing: error)
-                }
-            }
-            continuation.onTermination = { _ in task.cancel() }
-        }
-    }
-
     public func peerCertificate() -> Data? {
         lock.withLock { certificate }
     }
 
-    /// Nothing to do: returning from the task that owns the connection closes it.
-    public func close() {}
+    public func close() {
+        continuation.finish()
+        pump?.cancel()
+    }
 
     private func recordCertificate(from metadata: SillProtocol.Metadata) {
         guard peerCertificate() == nil else { return }
@@ -137,13 +140,14 @@ public struct SillListener: Sendable {
             if case .ready = state, let port = listener.port { onReady(port.rawValue) }
         }
         try await listener.run { connection in
+            // One connection's failure (rejected pairing, stale hello, protocol mismatch) is
+            // routine and must never take the listener down with it.
             SyncLog.write("listener accepted connection")
             do {
                 try await server.serve(NetworkSyncChannel(connection))
                 SyncLog.write("listener session ended")
             } catch {
                 SyncLog.write("listener session failed: \(error)")
-                throw error
             }
         }
     }

@@ -65,12 +65,20 @@ public final class NoteStore: Sendable {
     /// Every note (including tombstones) whose version the remote replica has not seen.
     /// Scans all rows; fine for the volume of a scratchpad.
     public func changes(since remote: VersionVector) throws -> [Note] {
+        try changesSnapshot(since: remote).notes
+    }
+
+    /// The outbound batch together with the vector *as of the same snapshot*. A round must send
+    /// exactly this pair: a vector read later could include a write whose row was never sent,
+    /// and the receiver would then believe it had seen that row forever.
+    public func changesSnapshot(since remote: VersionVector) throws -> (notes: [Note], vector: VersionVector) {
         try writer.read { db in
-            try NoteRecord
+            let notes = try NoteRecord
                 .order(sql: "origin_device, origin_seq")
                 .fetchAll(db)
                 .map { try $0.toNote() }
                 .filter { !remote.contains($0.version) }
+            return (notes, try Self.fetchVector(db))
         }
     }
 

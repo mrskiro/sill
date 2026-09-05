@@ -132,6 +132,66 @@ import Testing
         _ = try? await session.client.value
     }
 
+    /// A write that lands while a batch is being sent must still reach the peer in the next round.
+    /// (Regression: the vector was read after the batch, so the receiver "saw" a row it never got.)
+    @Test func writeDuringABatchIsNotLostToThePeer() async throws {
+        let pair = try Pair()
+        try pair.pairDirectly()
+        let session = pair.connect()
+        try await waitUntil { try pair.mac.store.peer(id: pair.phone.id)?.lastSyncAt != nil }
+
+        // While the phone is sending its batch, the user types another note on the phone.
+        let first = try pair.phone.store.createNote(content: "first")
+        nonisolated(unsafe) var slipped: Note?
+        session.channels.1.onSend = { message in
+            if case .changes = message, slipped == nil {
+                slipped = try? pair.phone.store.createNote(content: "typed mid-batch")
+            }
+        }
+        await pair.client.localChanged()
+        try await waitUntil { try pair.mac.store.note(id: first.id) != nil }
+        session.channels.1.onSend = nil
+        let late = try #require(slipped)
+
+        await pair.client.localChanged()
+        try await waitUntil { try pair.mac.store.note(id: late.id)?.content == "typed mid-batch" }
+
+        session.channels.1.close()
+        _ = try? await session.server.value
+        _ = try? await session.client.value
+    }
+
+    @Test func pairingWindowExpires() async throws {
+        let pair = try Pair()
+        let token = await pair.server.beginPairing(ttl: .milliseconds(30))
+        #expect(await pair.server.isPairing)
+        try await Task.sleep(for: .milliseconds(60))
+        #expect(await !pair.server.isPairing)
+        let session = pair.connect(pairingToken: token)
+        await #expect(throws: SyncError.pairingRejected) { try await session.server.value }
+        await #expect(throws: SyncError.pairingRejected) { try await session.client.value }
+    }
+
+    @Test func tokenComparisonIsExactAndLengthChecked() {
+        #expect(SyncServer.tokensMatch(Data([1, 2, 3]), Data([1, 2, 3])))
+        #expect(!SyncServer.tokensMatch(Data([1, 2, 3]), Data([1, 2, 4])))
+        #expect(!SyncServer.tokensMatch(Data([1, 2, 3]), Data([1, 2])))
+    }
+
+    @Test func silentPeerIsDroppedAfterTheHandshakeTimeout() async throws {
+        let mac = try Replica("Mac")
+        let server = SyncServer(store: mac.store, handshakeTimeout: .milliseconds(50))
+        let (macEnd, phoneEnd) = InMemoryChannel.pair()
+        macEnd.peerCertificateDER = try DeviceCertificate.generate(deviceID: UUID()).certificateDER
+        let serving = Task { try await server.serve(macEnd) }
+        // The phone never says anything.
+        _ = phoneEnd
+        let started = ContinuousClock.now
+        try await serving.value
+        #expect(ContinuousClock.now - started < .seconds(2))
+        #expect(await server.connectionCount == 0)
+    }
+
     @Test func helloFromAnUnpairedClientEndsTheSessionCleanly() async throws {
         let pair = try Pair()
         try pair.mac.store.addPeer(id: pair.phone.id, name: "iPhone", fingerprint: pair.phoneFingerprint)

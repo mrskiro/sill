@@ -71,6 +71,13 @@ public struct AppDatabase: Sendable {
                 );
                 """)
         }
+        // A (device, seq) pair is a version and must never repeat; make the database enforce it.
+        migrator.registerMigration("v2-unique-version") { db in
+            try db.execute(sql: """
+                DROP INDEX IF EXISTS note_origin;
+                CREATE UNIQUE INDEX note_origin ON note(origin_device, origin_seq);
+                """)
+        }
         return migrator
     }
 }

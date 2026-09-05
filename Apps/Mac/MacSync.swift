@@ -34,12 +34,22 @@ final class MacSync {
         let listener = SillListener(identity: identity, server: server, advertise: advertise)
         // MacSync lives as long as the app; strong captures are fine and keep Swift 6 happy.
         listenerTask = Task {
-            do {
-                try await listener.run { port in
-                    Task { @MainActor in self.port = port }
+            var backoff: Duration = .seconds(1)
+            while !Task.isCancelled {
+                do {
+                    try await listener.run { port in
+                        Task { @MainActor in self.port = port }
+                    }
+                    SyncLog.write("mac: listener ended")
+                } catch is CancellationError {
+                    break
+                } catch {
+                    self.log.error("listener stopped: \(error)")
+                    SyncLog.write("mac: listener failed: \(error)")
                 }
-            } catch {
-                self.log.error("listener stopped: \(error)")
+                self.port = nil
+                try? await Task.sleep(for: backoff)
+                backoff = min(backoff * 2, .seconds(30))
             }
         }
         eventTask = Task {
@@ -54,12 +64,18 @@ final class MacSync {
         eventTask?.cancel()
     }
 
+    static let pairingWindow: Duration = .seconds(120)
+
     @discardableResult
     func beginPairing() async -> PairingPayload {
-        let token = await server.beginPairing()
+        let token = await server.beginPairing(ttl: Self.pairingWindow)
         let payload = PairingPayload(deviceID: store.deviceID, name: store.deviceName, fingerprint: identity.fingerprint, token: token)
         pairingPayload = payload
         SyncLog.write("mac: pairing window open, qr \(payload.qrString.count) chars")
+        Task { [weak self] in
+            try? await Task.sleep(for: Self.pairingWindow)
+            if self?.pairingPayload == payload { await self?.endPairing() }
+        }
         return payload
     }
 

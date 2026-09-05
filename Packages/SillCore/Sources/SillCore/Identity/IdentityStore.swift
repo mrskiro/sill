@@ -6,6 +6,8 @@ public struct DeviceIdentity: @unchecked Sendable {
     public let deviceID: DeviceID
     public let certificateDER: Data
     public let secIdentity: SecIdentity
+    /// The same identity in the form Network.framework's TLS options take.
+    public let tlsIdentity: sec_identity_t
 
     public var fingerprint: Data { DeviceCertificate.fingerprint(of: certificateDER) }
 }
@@ -39,12 +41,19 @@ public struct IdentityStore: Sendable {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound { return nil }
         try check(status, "load identity")
-        let identity = result as! SecIdentity
+        guard let result, CFGetTypeID(result) == SecIdentityGetTypeID() else { throw IdentityError.identityNotFound }
+        let identity = result as! SecIdentity // type checked above
         var certificate: SecCertificate?
         try check(SecIdentityCopyCertificate(identity, &certificate), "copy certificate")
         guard let certificate else { throw IdentityError.identityNotFound }
+        guard let tlsIdentity = sec_identity_create(identity) else { throw IdentityError.identityNotFound }
         let der = SecCertificateCopyData(certificate) as Data
-        return DeviceIdentity(deviceID: try DeviceCertificate.deviceID(inCertificate: der), certificateDER: der, secIdentity: identity)
+        return DeviceIdentity(
+            deviceID: try DeviceCertificate.deviceID(inCertificate: der),
+            certificateDER: der,
+            secIdentity: identity,
+            tlsIdentity: tlsIdentity
+        )
     }
 
     /// Removes the identity (unpairing everything, or tests cleaning up).

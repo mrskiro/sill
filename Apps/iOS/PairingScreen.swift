@@ -10,18 +10,25 @@ struct PairingScreen: View {
     @State private var showScanner = false
     @State private var invalidCode = false
 
+    private var canScan: Bool {
+        DataScannerViewController.isSupported && DataScannerViewController.isAvailable
+    }
+
     var body: some View {
         NavigationStack {
             List {
                 Section {
-                    if DataScannerViewController.isSupported && DataScannerViewController.isAvailable {
+                    if canScan {
                         Button("Scan QR code on the Mac", systemImage: "qrcode.viewfinder") { showScanner = true }
+                    } else {
+                        // No usable camera (simulator, or camera access denied): accept the code as text.
+                        // The code carries the one-time token, so this path is kept off devices that can scan.
+                        TextField("Paste the pairing code", text: $pastedCode)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                        Button("Pair") { pair(code: pastedCode) }
+                            .disabled(pastedCode.isEmpty)
                     }
-                    TextField("…or paste the pairing code", text: $pastedCode)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled()
-                    Button("Pair") { pair(code: pastedCode) }
-                        .disabled(pastedCode.isEmpty)
                 } header: {
                     Text("Pair with a Mac")
                 } footer: {

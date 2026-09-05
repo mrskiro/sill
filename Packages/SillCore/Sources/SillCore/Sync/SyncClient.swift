@@ -31,8 +31,12 @@ public actor SyncClient {
         case inRound(pending: [Note])
     }
 
-    public init(store: NoteStore) {
+    /// A server that accepts TLS but never answers the handshake is dropped after this long.
+    public let handshakeTimeout: Duration
+
+    public init(store: NoteStore, handshakeTimeout: Duration = .seconds(15)) {
         self.store = store
+        self.handshakeTimeout = handshakeTimeout
         (sessionEvents, sessionSink) = AsyncStream.makeStream()
     }
 
@@ -57,6 +61,12 @@ public actor SyncClient {
         var peer: Peer?
         var serverVector = VersionVector()
         var roundRequested = false
+        let watchdog = Task { [handshakeTimeout] in
+            try await Task.sleep(for: handshakeTimeout)
+            SyncLog.write("client: handshake timed out")
+            channel.close()
+        }
+        defer { watchdog.cancel() }
 
         if let pairingToken {
             try await channel.send(.pair(.init(token: pairingToken, deviceID: store.deviceID, name: store.deviceName)))
@@ -91,6 +101,7 @@ public actor SyncClient {
                 if peer == nil { peer = try store.peer(fingerprint: fingerprint) }
                 guard let known = peer, hello.deviceID == known.id, certificateDeviceID == known.id else { throw SyncError.notPaired }
                 serverVector = hello.vector
+                watchdog.cancel()
                 log.info("session with \(known.name, privacy: .public)")
                 SyncLog.write("client: session with \(known.name)")
                 sessionSink.yield(.connected(known))
@@ -143,10 +154,10 @@ public actor SyncClient {
     }
 
     private func startRound(since serverVector: VersionVector, over channel: any SyncChannel) async throws {
-        let outbound = try store.changes(since: serverVector)
-        for start in stride(from: 0, to: outbound.count, by: 100) {
-            try await channel.send(.changes(Array(outbound[start..<min(start + 100, outbound.count)])))
+        let snapshot = try store.changesSnapshot(since: serverVector)
+        for start in stride(from: 0, to: snapshot.notes.count, by: 100) {
+            try await channel.send(.changes(Array(snapshot.notes[start..<min(start + 100, snapshot.notes.count)])))
         }
-        try await channel.send(.changesDone(try store.vector()))
+        try await channel.send(.changesDone(snapshot.vector))
     }
 }

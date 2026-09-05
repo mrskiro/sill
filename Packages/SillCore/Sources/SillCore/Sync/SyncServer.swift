@@ -7,6 +7,7 @@ import os
 public actor SyncServer {
     public let store: NoteStore
     private var pairingToken: Data?
+    private var pairingExpiresAt: ContinuousClock.Instant?
     private var channels: [UUID: any SyncChannel] = [:]
     private let log = Logger(subsystem: "com.mrskiro.sill", category: "sync-server")
 
@@ -19,33 +20,54 @@ public actor SyncServer {
     public nonisolated let events: AsyncStream<Event>
     private let eventSink: AsyncStream<Event>.Continuation
 
-    public init(store: NoteStore) {
+    /// A peer that completes TLS but never speaks is dropped after this long.
+    public let handshakeTimeout: Duration
+
+    public init(store: NoteStore, handshakeTimeout: Duration = .seconds(15)) {
         self.store = store
+        self.handshakeTimeout = handshakeTimeout
         (events, eventSink) = AsyncStream.makeStream()
     }
 
     // MARK: Pairing window
 
-    /// Starts accepting one unknown device; returns the one-time token to put in the QR code.
+    /// Starts accepting one unknown device for `ttl`; returns the one-time token to put in the QR code.
     @discardableResult
-    public func beginPairing() -> Data {
+    public func beginPairing(ttl: Duration = .seconds(120)) -> Data {
         var bytes = [UInt8](repeating: 0, count: 16)
         _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
         let token = Data(bytes)
         pairingToken = token
+        pairingExpiresAt = .now + ttl
         return token
     }
 
     public func endPairing() {
         pairingToken = nil
+        pairingExpiresAt = nil
     }
 
-    public var isPairing: Bool { pairingToken != nil }
+    /// True while the window is open; an expired window closes itself on the next check.
+    public var isPairing: Bool {
+        if let expiresAt = pairingExpiresAt, ContinuousClock.now >= expiresAt {
+            pairingToken = nil
+            pairingExpiresAt = nil
+        }
+        return pairingToken != nil
+    }
 
     /// Whether the TLS layer should let a certificate through. Called from the validator.
     public func isAcceptable(fingerprint: Data) -> Bool {
-        if pairingToken != nil { return true }
+        if isPairing { return true }
         return (try? store.peer(fingerprint: fingerprint)) != nil
+    }
+
+    /// Constant-time comparison for the bearer token (Data's `==` may short-circuit).
+    static func tokensMatch(_ a: Data, _ b: Data) -> Bool {
+        guard a.count == b.count else { return false }
+        var difference: UInt8 = 0
+        for (x, y) in zip(a, b) { difference |= x ^ y }
+        return difference == 0
     }
 
     // MARK: Serving
@@ -63,6 +85,12 @@ public actor SyncServer {
         }
 
         var inbox = channel.incoming.makeAsyncIterator()
+        let watchdog = Task { [handshakeTimeout] in
+            try await Task.sleep(for: handshakeTimeout)
+            SyncLog.write("server: handshake timed out")
+            channel.close()
+        }
+        defer { watchdog.cancel() }
 
         // First message: either `pair` (pairing window) or `hello` (known peer).
         guard let first = try await inbox.next() else { return }
@@ -70,15 +98,15 @@ public actor SyncServer {
         var peer = try store.peer(fingerprint: peerFingerprint)
         switch first {
         case .pair(let pair):
-            guard let token = pairingToken, token == pair.token else {
-                SyncLog.write("server: pairing rejected (window open: \(pairingToken != nil))")
+            guard isPairing, let token = pairingToken, Self.tokensMatch(token, pair.token) else {
+                SyncLog.write("server: pairing rejected (window open: \(isPairing))")
                 try await channel.send(.bye("pairing rejected"))
                 throw SyncError.pairingRejected
             }
             SyncLog.write("server: paired \(pair.name)")
             guard pair.deviceID == certificateDeviceID else { throw SyncError.identityMismatch }
             try store.addPeer(id: pair.deviceID, name: pair.name, fingerprint: peerFingerprint)
-            pairingToken = nil
+            endPairing()
             peer = try store.peer(id: pair.deviceID)
             if let peer { eventSink.yield(.paired(peer)) }
             try await channel.send(.paired(PeerInfo(deviceID: store.deviceID, name: store.deviceName)))
@@ -90,6 +118,7 @@ public actor SyncServer {
             throw SyncError.unexpectedMessage("expected pair or hello")
         }
         guard let peer else { throw SyncError.notPaired }
+        watchdog.cancel()
         log.info("session with \(peer.name, privacy: .public)")
         SyncLog.write("server: session with \(peer.name)")
 
@@ -138,10 +167,10 @@ public actor SyncServer {
     }
 
     private func sendChanges(since vector: VersionVector, over channel: any SyncChannel) async throws {
-        let outbound = try store.changes(since: vector)
-        for start in stride(from: 0, to: outbound.count, by: 100) {
-            try await channel.send(.changes(Array(outbound[start..<min(start + 100, outbound.count)])))
+        let snapshot = try store.changesSnapshot(since: vector)
+        for start in stride(from: 0, to: snapshot.notes.count, by: 100) {
+            try await channel.send(.changes(Array(snapshot.notes[start..<min(start + 100, snapshot.notes.count)])))
         }
-        try await channel.send(.changesDone(try store.vector()))
+        try await channel.send(.changesDone(snapshot.vector))
     }
 }
