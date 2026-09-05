@@ -1,9 +1,9 @@
 import Network
-import SillCore
 import Testing
 import UIKit
 
 @testable import Sill
+@testable import SillCore
 
 /// Nested so it runs serially with the capture tests (they share the app).
 extension PhoneFlowTests {
@@ -18,6 +18,47 @@ extension PhoneFlowTests {
                 try #require(ContinuousClock.now < deadline, "timed out waiting for condition")
                 try await Task.sleep(for: .milliseconds(25))
             }
+        }
+
+        /// A Mac on another protocol version: the phone says which app to update, stops retrying,
+        /// and keeps the pairing so updating the Mac and foregrounding is enough to recover.
+        @Test func aMacOnAnotherProtocolVersionStopsTheLoopWithoutLosingThePairing() async throws {
+            let sync = try #require(model.sync)
+            let macStore = try NoteStore(database: try AppDatabase.inMemory(), deviceName: "Old Mac")
+            let macIdentityStore = IdentityStore(label: "com.mrskiro.sill.test-old-mac.\(UUID().uuidString)")
+            defer { try? macIdentityStore.delete() }
+            let macIdentity = try macIdentityStore.loadOrCreate(deviceID: macStore.deviceID)
+            let server = SyncServer(store: macStore)
+            let (ports, portSink) = AsyncStream<UInt16>.makeStream()
+            let listenerTask = Task {
+                try await SillListener(identity: macIdentity, server: server, advertise: false).run {
+                    portSink.yield($0)
+                }
+            }
+            var portIterator = ports.makeAsyncIterator()
+            let port = try #require(await portIterator.next())
+            sync.endpointOverride = .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!)
+
+            await sync.client.useHelloProtocolVersion(SyncMessage.protocolVersion + 1)
+            let token = await server.beginPairing()
+            sync.pair(
+                with: PairingPayload(
+                    deviceID: macStore.deviceID, name: "Old Mac", fingerprint: macIdentity.fingerprint, token: token))
+
+            try await waitUntil { if case .failed = sync.status { return true } else { return false } }
+            #expect(sync.status.text.contains("older version of Sill"))
+            #expect(sync.status.text.contains("Update Sill there"))
+            // The pairing survived the refusal, so the phone still knows what to dial next time.
+            #expect(sync.peers.map(\.name) == ["Old Mac"])
+
+            await sync.client.useHelloProtocolVersion(SyncMessage.protocolVersion)
+            sync.stop()
+            listenerTask.cancel()
+            _ = try? await listenerTask.value
+            sync.unpair(macStore.deviceID)
+            sync.stop()
+            sync.endpointOverride = nil
+            #expect(sync.status == .unpaired)
         }
 
         @Test func phonePairsWithAMacAndNotesFlowBothWays() async throws {

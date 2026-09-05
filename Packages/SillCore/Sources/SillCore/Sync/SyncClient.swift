@@ -34,6 +34,13 @@ public actor SyncClient {
     /// A server that accepts TLS but never answers the handshake is dropped after this long.
     public let handshakeTimeout: Duration
 
+    /// Always the constant in the apps; tests move it to put the two ends on different versions.
+    private var helloProtocolVersion = SyncMessage.protocolVersion
+
+    func useHelloProtocolVersion(_ version: Int) {
+        helloProtocolVersion = version
+    }
+
     public init(store: NoteStore, handshakeTimeout: Duration = .seconds(15)) {
         self.store = store
         self.handshakeTimeout = handshakeTimeout
@@ -83,6 +90,8 @@ public actor SyncClient {
             switch (phase, event) {
             case (.pairing, .closed), (.pairing, .message(.bye)):
                 throw SyncError.pairingRejected
+            case (.hello, .message(.bye(let reason))) where SyncMessage.protocolVersion(inByeReason: reason) != nil:
+                throw SyncError.protocolVersion(SyncMessage.protocolVersion(inByeReason: reason) ?? 0)
             case (.hello, .closed), (.hello, .message(.bye)):
                 throw SyncError.notPaired
             case (_, .closed), (_, .message(.bye)):
@@ -159,7 +168,10 @@ public actor SyncClient {
 
     private func sendHello(over channel: any SyncChannel) async throws {
         try await channel.send(
-            .hello(.init(deviceID: store.deviceID, name: store.deviceName, vector: try store.vector())))
+            .hello(
+                .init(
+                    deviceID: store.deviceID, name: store.deviceName, protocolVersion: helloProtocolVersion,
+                    vector: try store.vector())))
     }
 
     private func startRound(since serverVector: VersionVector, over channel: any SyncChannel) async throws {

@@ -19,11 +19,35 @@ extension SyncChannel {
     }
 }
 
-public enum SyncError: Error, Equatable {
+public enum SyncError: Error, Equatable, LocalizedError {
     case unexpectedMessage(String)
     case notPaired
     case pairingRejected
     case identityMismatch
     case protocolVersion(Int)
     case closed
+
+    /// Shown to the user (the phone puts it under the note list), so every case reads as a
+    /// sentence. `.protocolVersion` never says "Mac" or "iPhone": both sides raise it, and each
+    /// one means "the device at the other end".
+    public var errorDescription: String? {
+        switch self {
+        case .unexpectedMessage(let expected): "The other device sent something unexpected (expected \(expected))."
+        case .notPaired: "The other device is not paired with this one."
+        case .pairingRejected: "Pairing was refused. Show the pairing code on the Mac again."
+        case .identityMismatch: "The other device did not prove it is the one you paired with."
+        case .protocolVersion(let theirs):
+            theirs > SyncMessage.protocolVersion
+                ? "The other device runs a newer version of Sill. Update this app to keep syncing."
+                : "The other device runs an older version of Sill. Update Sill there to keep syncing."
+        case .closed: "The connection closed."
+        }
+    }
+
+    /// Reconnecting cannot fix these, so the phone stops its retry loop instead of spinning:
+    /// only updating one of the two apps changes the answer.
+    public var isUnrecoverable: Bool {
+        if case .protocolVersion = self { return true }
+        return false
+    }
 }

@@ -5,6 +5,17 @@ import Foundation
 public enum SyncMessage: Codable, Sendable, Equatable {
     public static let protocolVersion = 1
 
+    /// A refusal for version reasons: `bye("protocol-version:1")`. Frozen wire surface — a peer
+    /// that speaks a later version still has to send this exact shape, because v1 apps are the
+    /// ones that have to understand the refusal, and v1 can no longer be changed.
+    public static var versionByeReason: String { "protocol-version:\(protocolVersion)" }
+
+    /// The peer's version if `reason` is such a refusal.
+    public static func protocolVersion(inByeReason reason: String?) -> Int? {
+        guard let reason, reason.hasPrefix("protocol-version:") else { return nil }
+        return Int(reason.dropFirst("protocol-version:".count))
+    }
+
     case hello(Hello)
     /// Client → server, only while the server shows a pairing QR.
     case pair(Pair)
