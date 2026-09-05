@@ -13,6 +13,8 @@
 ## ビルド / テスト
 
 - `make gen` で `Sill.xcodeproj` を生成（XcodeGen、生成物は gitignore）。ファイル追加は syncedFolder なので再生成不要。
+  ただし新しい *ディレクトリ*（`Assets.xcassets` など）は DerivedData のビルド記述に載らず黙って無視される。`rm -rf ~/Library/Developer/Xcode/DerivedData/Sill-*` してから `make gen`。
+- `make icons` で両 `Assets.xcassets` を `scripts/make-app-icon.swift` から描き直す（幾何はスクリプト内の定数が正）。
 - `make test` = `swift test`（SillCore）+ Mac ホスト型 + iOS simulator ホスト型。`make lint` は swift-format（`.swift-format`）。
 - 実機: `make device-check DEVICE=<id>`（`xcrun devicectl list devices`）。iPhone はロック解除が必要。Mac アプリを `SILL_DEBUG=1` で起動して `sill://debug/...` を使う。
 - 両アプリは `Application Support/Sill/sync.log` に同期の経過を残す。iPhone 側は `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier com.mrskiro.sill --source "Library/Application Support/Sill/sync.log"` で取れる。
