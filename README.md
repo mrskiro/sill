@@ -25,6 +25,7 @@ make lint       # swift-format（設定は .swift-format）。make format で整
 - `Tests/Mac` / `Tests/iOS` は Sill.app 内で動くホスト型テスト。`SILL_TEST_MODE=1` で使い捨て DB を使い、Mac ではパネルが key window にならないので他アプリへの入力を奪わない。
 - 署名は `Configs/Local.xcconfig`（gitignore 済み）の `DEVELOPMENT_TEAM`。Mac も team 署名（data protection keychain に端末 identity を置くため）。初回は `-allowProvisioningUpdates -allowProvisioningDeviceRegistration` で profile が作られる（Makefile に含む）。
 - ペアリング: Mac の Settings（⌘,）で「Pair iPhone…」→ iPhone の Sync 画面で QR をスキャン（またはコードを貼り付け）。
+- 更新と不具合報告: Sill › Check for Updates…（押したときだけ GitHub Releases を1回見る。自動チェックはしない）、Help › Report an Issue…（バージョンと OS が入った Issue フォームが開く）、Help › Reveal Sync Log in Finder（`sync.log` はデバイス名とペアリングコードの先頭を含むので、貼る前に中身を確認する）。
 - Mac のキー: ⌥S 表示/非表示（Settings で変更可）、Esc 閉じる、⌘N 新規、⌘⇧C Markdown としてコピー、⌥⌘S サイドバー（フッター左のボタンでも開閉）、⌘⌫ 削除、⌘⇧P ピン（クリックで隠れない）、Return / Tab / ⇧Tab / ⌘Return でリスト操作。
 
 ## CI / Release
