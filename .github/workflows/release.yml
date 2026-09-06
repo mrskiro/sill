@@ -1,4 +1,4 @@
-# Tag `vX.Y.Z` → notarized macOS build attached to a GitHub Release.
+# Tag `vX.Y.Z` → notarized macOS disk image attached to a GitHub Release.
 #
 # Not exercised until these repository secrets exist (Settings › Secrets and variables › Actions):
 #   APPLE_TEAM_ID                 e.g. ABCDE12345
@@ -137,28 +137,52 @@ jobs:
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Sill.xcarchive" \
             -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" -quiet
 
-      - name: Notarize and staple
+      - name: Notarize and build the disk image
         env:
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          NOTARIZE=(--key "$RUNNER_TEMP/asc/AuthKey.p8" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait)
           cd "$RUNNER_TEMP/export"
-          ditto -c -k --keepParent Sill.app "Sill-${GITHUB_REF_NAME#v}.zip"
-          xcrun notarytool submit "Sill-${GITHUB_REF_NAME#v}.zip" \
-            --key "$RUNNER_TEMP/asc/AuthKey.p8" --key-id "$ASC_KEY_ID" --issuer "$ASC_ISSUER_ID" --wait
+
+          # The app first. A ticket cannot be stapled to an archive, so the zip is only the
+          # envelope the notary service accepts — the ticket lands on Sill.app itself, which is
+          # what lets a copy dragged out of the image launch on a machine that is offline.
+          ditto -c -k --keepParent Sill.app "$RUNNER_TEMP/Sill.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/Sill.zip" "${NOTARIZE[@]}"
           xcrun stapler staple Sill.app
-          rm "Sill-${GITHUB_REF_NAME#v}.zip"
-          ditto -c -k --keepParent Sill.app "Sill-${GITHUB_REF_NAME#v}.zip"
-          shasum -a 256 "Sill-${GITHUB_REF_NAME#v}.zip" > "Sill-${GITHUB_REF_NAME#v}.zip.sha256"
-          # `install` is the assessment type for installer packages; an app is assessed as code.
-          spctl -a -vvv --type execute Sill.app
-          xcrun stapler validate Sill.app
+
+          # Then the thing people download. Deliberately plain: the app and a link to drop it
+          # into, no background art to keep in step with the icon. Dragging it out of the image
+          # is also what clears the quarantine flag, so the app is not run translocated from
+          # a random read-only path the way a zip left in ~/Downloads would be.
+          STAGE="$RUNNER_TEMP/dmg"
+          mkdir -p "$STAGE"
+          cp -R Sill.app "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname Sill -srcfolder "$STAGE" -ov -format UDZO -quiet "Sill-$VERSION.dmg"
+          xcrun notarytool submit "Sill-$VERSION.dmg" "${NOTARIZE[@]}"
+          xcrun stapler staple "Sill-$VERSION.dmg"
+          shasum -a 256 "Sill-$VERSION.dmg" > "Sill-$VERSION.dmg.sha256"
+
+      - name: Verify what will be published
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          cd "$RUNNER_TEMP/export"
+          xcrun stapler validate "Sill-$VERSION.dmg"
+          hdiutil attach -quiet -nobrowse -mountpoint "$RUNNER_TEMP/mnt" "Sill-$VERSION.dmg"
+          # What Gatekeeper does when someone opens it: expect "accepted / Notarized Developer ID".
+          # `install` would assess it as an installer package; an app is assessed as code.
+          spctl -a -vvv --type execute "$RUNNER_TEMP/mnt/Sill.app"
+          xcrun stapler validate "$RUNNER_TEMP/mnt/Sill.app"
+          hdiutil detach -quiet "$RUNNER_TEMP/mnt"
 
       - name: GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh release create "$GITHUB_REF_NAME" \
-            "$RUNNER_TEMP/export/Sill-${GITHUB_REF_NAME#v}.zip" \
-            "$RUNNER_TEMP/export/Sill-${GITHUB_REF_NAME#v}.zip.sha256" \
+            "$RUNNER_TEMP/export/Sill-${GITHUB_REF_NAME#v}.dmg" \
+            "$RUNNER_TEMP/export/Sill-${GITHUB_REF_NAME#v}.dmg.sha256" \
             --title "Sill $GITHUB_REF_NAME" --generate-notes
