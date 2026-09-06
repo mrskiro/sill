@@ -80,6 +80,24 @@ they are; Connect scales them for smaller phones. Order:
 2. Editor with a Markdown checklist
 3. Sync screen
 
+## Uploading a build
+
+The `ios` job in `.github/workflows/release.yml` runs on the same `vX.Y.Z` tag as the Mac release. It
+archives `SillPhone` with manual signing, then `xcodebuild -exportArchive` with `destination: upload`
+sends it to App Store Connect, authenticated by the existing ASC API key. The build number is the
+workflow run number, so nothing about versions is committed. Processing takes a few minutes; the build
+then appears under TestFlight and can be selected on the version page.
+
+One-time setup, in addition to the Mac secrets:
+
+| Secret | Where it comes from |
+|---|---|
+| `IOS_CERTIFICATE_P12` / `IOS_CERTIFICATE_PASSWORD` | Certificates › **Apple Distribution** (not Developer ID). Export from Keychain Access as .p12, base64-encode |
+| `IOS_PROVISION_PROFILE` | Profiles › **App Store Connect** for `com.mrskiro.sill`, named **Sill App Store** (project.yml asks for that name). Download, base64-encode |
+
+The app record (bundle ID `com.mrskiro.sill`) has to exist in App Store Connect before the first upload,
+or it is rejected with "No suitable application records were found".
+
 ## Checklist before "Submit for Review"
 
 - [ ] Build uploaded (`release.yml`, iOS lane) and selected on the version page

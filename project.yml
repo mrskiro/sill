@@ -106,6 +106,13 @@ targets:
         CODE_SIGN_STYLE: Automatic
         TARGETED_DEVICE_FAMILY: "1"
         SUPPORTS_MACCATALYST: NO
+      configs:
+        # The App Store archive, signed like the Mac's: manually, against a profile the release
+        # workflow installs, so nothing on the runner has to talk to cloud signing.
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: Sill App Store
     entitlements:
       path: Apps/iOS/Sill.entitlements
       properties:
