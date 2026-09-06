@@ -1,0 +1,99 @@
+:root {
+  color-scheme: light dark;
+  --bg: #FFFFFF;
+  --ink: #0A0A0A;
+  --muted: #737373;
+  --line: #E5E5E5;
+  --button: #0A0A0A;
+  --button-ink: #FFFFFF;
+  --mark-ground: #F0EFEA;
+  --mark-bar: #404046;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0A0A0A;
+    --ink: #F5F5F5;
+    --muted: #8A8A8A;
+    --line: #262626;
+    --button: #F5F5F5;
+    --button-ink: #0A0A0A;
+    --mark-ground: #232326;
+    --mark-bar: #EDEDF2;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 64px 24px 48px;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: inherit; }
+main { max-width: 32rem; margin: 0 auto; }
+kbd {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 0.9em;
+  padding: 0 0.35em;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.brand { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+.mark { width: 28px; height: 28px; }
+.tagline { text-align: center; color: var(--muted); margin: 10px 0 24px; }
+
+.actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+.button {
+  display: inline-block; padding: 8px 18px; border-radius: 999px;
+  font-weight: 500; text-decoration: none; font-size: 14px;
+  background: var(--button); color: var(--button-ink); border: 1px solid var(--button);
+}
+.button.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+.fine { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 0 0; }
+
+/* An illustration of the floating panel, not a screenshot. */
+.panel { margin: 40px 0 48px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+.panel-bar { display: flex; gap: 6px; padding: 12px 12px 0; }
+.panel-bar i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line); }
+.panel-body { padding: 14px 20px 20px; white-space: pre-wrap; line-height: 1.65; }
+.panel-body .dim { color: var(--muted); }
+.panel-foot { display: flex; justify-content: space-between; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+
+.features { margin: 0; padding: 0 16px; }
+.features dt { font-weight: 600; margin-top: 20px; }
+.features dd { margin: 2px 0 0; color: var(--muted); }
+
+hr { border: 0; border-top: 1px solid var(--line); margin: 48px 0; }
+
+.get dt { font-weight: 600; margin-top: 20px; }
+.get dd { margin: 2px 0 0; color: var(--muted); }
+.get { padding: 0 16px; }
+pre {
+  margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; line-height: 1.6;
+  color: var(--ink); overflow-x: auto;
+}
+
+footer { margin-top: 96px; text-align: center; font-size: 13px; color: var(--muted); }
+footer nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; }
+footer a { text-decoration: none; }
+footer a:hover { text-decoration: underline; }
+footer p { margin: 14px 0 0; }
+
+/* Prose pages (privacy, support) */
+.prose h1 { font-size: 22px; margin: 40px 0 4px; letter-spacing: -0.01em; }
+.prose .updated { color: var(--muted); font-size: 13px; margin: 0 0 24px; }
+.prose h2 { font-size: 15px; font-weight: 600; margin: 28px 0 6px; }
+.prose p, .prose li { margin: 0 0 10px; color: var(--muted); }
+.prose ul { padding-left: 20px; margin: 0 0 10px; }
+.prose strong { color: var(--ink); font-weight: 600; }
+.prose a { color: var(--ink); }
+.back { display: inline-block; color: var(--muted); text-decoration: none; font-size: 13px; }
+.back:hover { text-decoration: underline; }
+code { font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 0.9em; }

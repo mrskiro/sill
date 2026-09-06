@@ -56,6 +56,7 @@ struct PairingScreen: View {
                     Link(
                         "Report an Issue",
                         destination: Support.newIssueURL(environment: Support.environmentSummary()))
+                    Link("Privacy Policy", destination: Support.privacyPolicyURL)
                 } footer: {
                     Text(Support.environmentSummary())
                 }

@@ -51,6 +51,8 @@ struct SillApp: App {
                 // The log names devices and carries pairing-code prefixes, so it is revealed,
                 // never attached: the user reads it before pasting anything into an issue.
                 Button("Reveal Sync Log in Finder") { revealSyncLog() }
+                Divider()
+                Button("Privacy Policy") { NSWorkspace.shared.open(Support.privacyPolicyURL) }
             }
         }
     }
