@@ -5,6 +5,13 @@ import Foundation
 public enum Support {
     public static let repository = URL(string: "https://github.com/mrskiro/sill")!
 
+    /// The site under `site/` in the repository, published by GitHub Pages. App Store review
+    /// requires the privacy policy to be reachable from inside the app, hence the links in the
+    /// Help menu and the Sync screen.
+    public static let website = URL(string: "https://mrskiro.github.io/sill/")!
+    public static var privacyPolicyURL: URL { website.appending(path: "privacy.html") }
+    public static var supportURL: URL { website.appending(path: "support.html") }
+
     /// e.g. `Sill 0.1.0 (12) · macOS 26.6`. Both apps send the same shape so issues sort by it.
     public static func environmentSummary(
         bundle: Bundle = .main,

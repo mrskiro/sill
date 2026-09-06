@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sill — Privacy Policy</title>
+<meta name="description" content="Sill collects no data. Notes stay on your devices and sync directly between them.">
+<link rel="icon" href="favicon.png" sizes="64x64" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="prose">
+  <a class="back" href="./">← Sill</a>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated September 6, 2026</p>
+
+  <p><strong>Sill does not collect any data.</strong> There is no account, no analytics, no crash reporting, no advertising, and no third-party SDK that sends anything anywhere. Nothing you write in Sill ever reaches a server operated by the developer, because there is none.</p>
+
+  <h2>What stays on your device</h2>
+  <ul>
+    <li><strong>Notes.</strong> Stored in a single SQLite database inside the app's own container on each device. On the Mac that is <code>~/Library/Application Support/Sill/</code>.</li>
+    <li><strong>Device identity.</strong> Each device creates a self-signed certificate and private key at first launch and keeps them in the system Keychain. They identify your devices to each other and are never sent anywhere else.</li>
+    <li><strong>Sync log.</strong> A plain-text file next to the database records how sync went. It contains the names of your paired devices and the first characters of pairing codes. It is only shared if you paste it into a bug report yourself.</li>
+  </ul>
+
+  <h2>Sync between your own devices</h2>
+  <p>When you pair an iPhone with a Mac, the two devices exchange certificate fingerprints through a QR code shown on the Mac. From then on they talk to each other directly over your local network or peer-to-peer Wi-Fi, using mutual TLS. Only devices you paired can connect, and only while they are near each other. No copy of your notes passes through the internet or any relay.</p>
+  <p>This is why Sill asks for the <strong>Local Network</strong> permission and advertises a Bonjour service (<code>_sill._tcp</code>): it is how the devices find each other in the same room. The advertised name is random and does not include your device name.</p>
+
+  <h2>Connections to third parties</h2>
+  <p>Sill contacts exactly one third party, GitHub, and only when you ask it to:</p>
+  <ul>
+    <li><strong>Check for Updates</strong> (Mac) makes a single request to GitHub's releases API to read the latest version number. Sill never checks in the background.</li>
+    <li><strong>Report an Issue</strong> opens GitHub in your browser with the app version and OS version filled into the issue form. Whether you submit it is up to you.</li>
+  </ul>
+  <p>Those requests are governed by <a href="https://docs.github.com/site-policy/privacy-policies/github-general-privacy-statement">GitHub's privacy statement</a>. This website is hosted on GitHub Pages, so GitHub may log visits to it as well.</p>
+
+  <h2>Retention and deletion</h2>
+  <p>The developer holds no data about you, so there is nothing to retain or delete on that side. Deleting a note erases its text on the device and, on the next sync, on your paired devices; only an empty marker remains so the deletion can propagate. Unpairing a device removes its certificate from the other. Deleting the app removes its database and log. The device certificate stays in the system Keychain, as Keychain items do; it contains no note content and identifies nothing beyond that device.</p>
+
+  <h2>Consent</h2>
+  <p>Since no data is collected, there is no consent to give or withdraw. The Local Network permission can be revoked at any time in System Settings or Settings; Sill keeps working as a notepad without it, only sync stops.</p>
+
+  <h2>Children</h2>
+  <p>Sill has no age-specific features and collects no data from anyone, of any age.</p>
+
+  <h2>Changes</h2>
+  <p>This page lives in the app's public repository, so every change to it is visible in the <a href="https://github.com/mrskiro/sill/commits/main/site/privacy.html">commit history</a>. Material changes will also be noted in the release notes.</p>
+
+  <h2>Contact</h2>
+  <p>Questions about this policy go to the <a href="https://github.com/mrskiro/sill/issues">issue tracker</a> on GitHub.</p>
+
+  <footer>
+    <nav>
+      <a href="./">Home</a>
+      <a href="https://github.com/mrskiro/sill">Source</a>
+      <a href="support.html">Support</a>
+      <a href="privacy.html">Privacy</a>
+    </nav>
+    <p>© 2026 Sill · MIT License</p>
+  </footer>
+</main>
+</body>
+</html>
