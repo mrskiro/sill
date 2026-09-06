@@ -2,12 +2,9 @@
 #
 # Not exercised until these repository secrets exist (Settings › Secrets and variables › Actions):
 #   APPLE_TEAM_ID                 e.g. ABCDE12345
-#   ASC_KEY_ID / ASC_ISSUER_ID    App Store Connect API key. It has to be able to manage
-#                                 Certificates, Identifiers & Profiles (Admin, or App Manager with
-#                                 that access): the same key notarizes AND creates the Developer ID
-#                                 provisioning profile, which this app needs because its sandbox
-#                                 entitlements include keychain-access-groups. A Developer-role key
-#                                 notarizes fine but fails the export with "No profiles were found".
+#   ASC_KEY_ID / ASC_ISSUER_ID    App Store Connect API key, used only to notarize, so the
+#                                 Developer role is enough. Signing does not touch Apple's servers:
+#                                 the Release config signs manually against the profile below.
 #   ASC_API_KEY_P8                the .p8 contents, base64-encoded
 #   MACOS_CERTIFICATE_P12         "Developer ID Application" certificate + key, .p12 base64-encoded
 #   MACOS_PROVISION_PROFILE       the "Developer ID" .provisionprofile, base64-encoded. Made once in
@@ -107,15 +104,12 @@ jobs:
       - name: Archive and export (Developer ID)
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
+          # No -allowProvisioningUpdates and no API key: the Release config in project.yml signs
+          # against the profile installed above, so nothing here asks Apple for anything.
           xcodebuild -project Sill.xcodeproj -scheme Sill -destination 'generic/platform=macOS' \
             -archivePath "$RUNNER_TEMP/Sill.xcarchive" -quiet \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             archive
           cat > "$RUNNER_TEMP/export.plist" <<PLIST
