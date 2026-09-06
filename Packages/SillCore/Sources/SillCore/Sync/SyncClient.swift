@@ -12,7 +12,9 @@ public actor SyncClient {
     /// UI-facing notifications.
     public enum SessionEvent: Sendable, Equatable {
         case connected(Peer)
-        case synced(Peer)
+        /// `changed` is false for a round that applied nothing, so a Mac relaying between two
+        /// peers can stop instead of poking the other side after every empty round.
+        case synced(Peer, changed: Bool)
         case ended
     }
     public nonisolated let sessionEvents: AsyncStream<SessionEvent>
@@ -135,9 +137,13 @@ public actor SyncClient {
                 phase = .inRound(pending: pending)
             case (.inRound(let pending), .message(.changesDone(let vector))):
                 guard let known = peer else { throw SyncError.notPaired }
-                try store.apply(pending, senderID: known.id, senderName: known.name, senderVector: vector)
+                let applied = try store.apply(
+                    pending, senderID: known.id, senderName: known.name, senderVector: vector)
                 try store.markSynced(peerID: known.id)
-                if let synced = try store.peer(id: known.id) { sessionSink.yield(.synced(synced)) }
+                if let synced = try store.peer(id: known.id) {
+                    let changed = applied.inserted + applied.overwritten + applied.conflictCopies > 0
+                    sessionSink.yield(.synced(synced, changed: changed))
+                }
                 serverVector = vector
                 if roundRequested {
                     roundRequested = false

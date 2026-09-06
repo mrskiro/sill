@@ -50,7 +50,7 @@ extension CaptureFlowTests {
             try await waitUntil {
                 sync.peers.map(\.name) == ["Test iPhone"] && sync.pairingPayload == nil && sync.connections == 1
             }
-            #expect(sync.statusText == "iPhone connected")
+            #expect(sync.statusText == "1 device connected")
 
             // Typing on the Mac → autosave → poke → phone.
             app.newNote()

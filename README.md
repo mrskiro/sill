@@ -3,7 +3,7 @@
 [![CI](https://github.com/mrskiro/sill/actions/workflows/ci.yml/badge.svg)](https://github.com/mrskiro/sill/actions/workflows/ci.yml)
 
 思いついたものを、窓辺に一旦置くように書ける、小さなローカルファースト Markdown メモ。
-macOS + iPhone、アカウント無し、近くにいるときだけ直接 P2P 同期。
+macOS + iPhone、アカウント無し、近くにいるときだけ直接 P2P 同期。Mac 同士も同期する。
 
 サイト: https://mrskiro.github.io/sill/ ・ 設計: [docs/design.md](docs/design.md)
 
@@ -24,7 +24,7 @@ make lint       # swift-format（設定は .swift-format）。make format で整
 - `Packages/SillCore` は `swift test` で単体で回る（モデル、GRDB ストア、同期エンジン、編集ヘルパー）。
 - `Tests/Mac` / `Tests/iOS` は Sill.app 内で動くホスト型テスト。`SILL_TEST_MODE=1` で使い捨て DB を使い、Mac ではパネルが key window にならないので他アプリへの入力を奪わない。
 - 署名は `Configs/Local.xcconfig`（gitignore 済み）の `DEVELOPMENT_TEAM`。Mac も team 署名（data protection keychain に端末 identity を置くため）。初回は `-allowProvisioningUpdates -allowProvisioningDeviceRegistration` で profile が作られる（Makefile に含む）。
-- ペアリング: Mac の Settings（⌘,）で「Pair iPhone…」→ iPhone の Sync 画面で QR をスキャン（またはコードを貼り付け）。
+- ペアリング: Mac の Settings（⌘,）で「Pair a Device…」→ iPhone の Sync 画面で QR をスキャン（またはコードを貼り付け）。Mac 同士は「Copy Code」で写して、もう一方の Settings のフィールドに貼る。
 - 更新と不具合報告: Sill › Check for Updates…（押したときだけ GitHub Releases を1回見る。自動チェックはしない）、Help › Report an Issue…（バージョンと OS が入った Issue フォームが開く）、Help › Reveal Sync Log in Finder（`sync.log` はデバイス名とペアリングコードの先頭を含むので、貼る前に中身を確認する）。
 - Mac のキー: ⌥S 表示/非表示（Settings で変更可）、Esc 閉じる、⌘N 新規、⌘⇧C Markdown としてコピー、⌥⌘S サイドバー（フッター左のボタンでも開閉）、⌘⌫ 削除、⌘⇧P ピン（クリックで隠れない）、Return / Tab / ⇧Tab / ⌘Return でリスト操作。
 

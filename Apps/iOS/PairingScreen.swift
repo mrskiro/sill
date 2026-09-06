@@ -33,7 +33,8 @@ struct PairingScreen: View {
                     Text("Pair with a Mac")
                 } footer: {
                     Text(
-                        invalidCode ? "That is not a Sill pairing code." : "On the Mac: Sill › Settings › Pair iPhone.")
+                        invalidCode
+                            ? "That is not a Sill pairing code." : "On the Mac: Sill › Settings › Pair a Device.")
                 }
                 if !sync.peers.isEmpty {
                     Section("Paired devices") {

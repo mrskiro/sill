@@ -16,7 +16,9 @@ public actor SyncServer {
     public enum Event: Sendable, Equatable {
         case connections(Int)
         case paired(Peer)
-        case synced(Peer)
+        /// `changed` is false for a round that applied nothing, so a Mac relaying between two
+        /// peers can stop instead of poking the other side after every empty round.
+        case synced(Peer, changed: Bool)
     }
     public nonisolated let events: AsyncStream<Event>
     private let eventSink: AsyncStream<Event>.Continuation
@@ -138,8 +140,11 @@ public actor SyncServer {
                 pending = []
                 try await sendChanges(since: clientVector, over: channel)
                 try store.markSynced(peerID: peer.id)
-                if let synced = try store.peer(id: peer.id) { eventSink.yield(.synced(synced)) }
-                if applied.inserted + applied.overwritten + applied.conflictCopies > 0 {
+                let changed = applied.inserted + applied.overwritten + applied.conflictCopies > 0
+                if let synced = try store.peer(id: peer.id) {
+                    eventSink.yield(.synced(synced, changed: changed))
+                }
+                if changed {
                     await poke(except: id)  // other connected devices should pick this up too
                 }
             case .bye:
