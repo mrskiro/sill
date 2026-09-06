@@ -44,5 +44,10 @@ lint:
 device-check: build-mac
 	scripts/device-sync-check.sh $(DEVICE)
 
+# Cut a release from this machine (cheaper than the 10x-billed macOS runner while private).
+# One-time setup and the whole flow are documented at the top of the script.
+release:
+	scripts/release-local.sh $(VERSION)
+
 clean:
 	rm -rf $(PROJECT) Packages/SillCore/.build
