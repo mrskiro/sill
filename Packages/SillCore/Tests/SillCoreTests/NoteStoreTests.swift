@@ -162,11 +162,11 @@ import Testing
         let store = try NoteStore(database: try AppDatabase.inMemory(), deviceName: "Mac")
         let peerID = UUID()
         let fingerprint = Data(repeating: 3, count: 32)
-        try store.addPeer(id: peerID, name: "iPhone", fingerprint: fingerprint, kind: .phone)
-        #expect(try store.peer(id: peerID)?.kind == .phone)
+        try store.addPeer(id: peerID, name: "iPhone", fingerprint: fingerprint, kind: .ios)
+        #expect(try store.peer(id: peerID)?.kind == .ios)
 
         try store.addPeer(id: peerID, name: "iPhone renamed", fingerprint: fingerprint)
-        #expect(try store.peer(id: peerID)?.kind == .phone)
+        #expect(try store.peer(id: peerID)?.kind == .ios)
         #expect(try store.peer(id: peerID)?.name == "iPhone renamed")
     }
 }

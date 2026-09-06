@@ -111,7 +111,7 @@ CREATE TABLE seen (                     -- version vector。自分の行も含�
 
 CREATE TABLE peer (                     -- 信頼済み端末
   id TEXT PRIMARY KEY, name TEXT NOT NULL, cert_fingerprint BLOB NOT NULL, paired_at REAL NOT NULL, last_sync_at REAL,
-  kind TEXT                             -- 'mac' / 'phone'。hello で分かるまで NULL
+  kind TEXT                             -- 'mac' / 'ios'。hello で分かるまで NULL
 );
 ```
 
@@ -153,7 +153,7 @@ CREATE TABLE peer (                     -- 信頼済み端末
 
 - 役割: **Mac = `NetworkListener`（server）+ 必要なら `NetworkBrowser` / `NetworkConnection`（client）、iPhone = client のみ**。iPhone は advertise しないので、Mac ↔ iPhone は従来どおり client-server で dedup が要らない。
 - **Mac 同士**は両方が listener でもあり client でもあるので、放っておくと互いに 1 本ずつ張って round が二重に走る。`SyncRole`（`Sync/SyncRole.swift`）で **device id（UUID 文字列）の小さい方が dial する**と決める。状態を持たず、両端が同じ答えに着くので折衝が要らない。ペアリングだけはこの規則を無視して、コードを貼った側が 1 回 dial する（その後 round を 1 巡してから、規則が指す側に dial を譲る）。
-- iPhone は dial しない。`hello` に `kind`（mac / phone、オプショナル）を載せ、`peer.kind` に覚える。無いと「絶対に現れないサービス」を browse し続けることになる。**オプショナルなので protocolVersion は上げない**: JSON デコードは未知のキーを無視し、欠けたキーは nil になる。逆にバージョンを上げると `hello.protocolVersion` の完全一致判定で旧版を切ってしまう。kind が未知の peer（この版より前に paired した行）は従来どおり dial 候補のままで、相手が一度 hello を送れば埋まる。
+- iPhone は dial しない。`hello` に `kind`（mac / ios、オプショナル）を載せ、`peer.kind` に覚える。無いと「絶対に現れないサービス」を browse し続けることになる。**オプショナルなので protocolVersion は上げない**: JSON デコードは未知のキーを無視し、欠けたキーは nil になる。逆にバージョンを上げると `hello.protocolVersion` の完全一致判定で旧版を切ってしまう。kind が未知の peer（この版より前に paired した行）は従来どおり dial 候補のままで、相手が一度 hello を送れば埋まる。
 - 3 台以上の Mac では「自分より大きい id のうち最初に見つけた 1 台」に繋ぐだけなので、接続グラフは連結とは限らない（2 台 + iPhone は常に連結）。台数が増えたら peer ごとに dial タスクを持つ形にする。
 - Mac は起動中ずっと `.bonjour(type: "_sill._tcp", txtRecord: [fp: 証明書 fingerprint 先頭 8 byte])` を advertise。サービス名は端末名ではなくランダム（TN3213 の privacy 指針）。dial する側の Mac は同じ TXT を見て相手を選ぶ（`MacDialer`）。
 - iPhone は foreground かつ未接続の間 browse を続け、TXT の `fp` が信頼済み Mac に一致する endpoint が現れたら **browse を止めてから** connect。Mac を後から起動しても iPhone 側が見つける。
@@ -395,4 +395,4 @@ sill/
 | 8 | 保存形式 | SQLite（GRDB）。export / MCP は後から |
 | 9 | 同期の起点 | iPhone が接続を維持し、Mac は `poke` で round を起こす |
 | 10 | Mac 同士 | 両方が listener 兼 client。device id の小さい方が dial する（`SyncRole`）。ペアリングはコードを貼る側が 1 回だけ dial |
-| 11 | 端末種別 | `hello` のオプショナル `kind` で交換し `peer.kind` に保存。iPhone は dial しない。オプショナルなので protocolVersion は据え置き |
+| 11 | 端末種別 | `hello` のオプショナル `kind`（mac / ios）で交換し `peer.kind` に保存。iOS は dial しない。プラットフォーム名にしたのは iPad でケースを増やさないため。未知の値は `.unknown` に落として読む（ケースを足しても旧版のデコードを壊さない）。オプショナルなので protocolVersion は据え置き |

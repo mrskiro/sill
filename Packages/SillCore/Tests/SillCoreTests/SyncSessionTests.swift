@@ -14,7 +14,7 @@ import Testing
 
         init() throws {
             mac = try Replica("Mac")
-            phone = try Replica("iPhone", kind: .phone)
+            phone = try Replica("iPhone", kind: .ios)
             server = SyncServer(store: mac.store)
             client = SyncClient(store: phone.store)
             macCertificate = try DeviceCertificate.generate(deviceID: mac.id)
@@ -75,7 +75,7 @@ import Testing
         #expect(try pair.mac.store.peer(id: pair.phone.id)?.kind == nil)
         let session = pair.connect()
 
-        try await waitUntil { try pair.mac.store.peer(id: pair.phone.id)?.kind == .phone }
+        try await waitUntil { try pair.mac.store.peer(id: pair.phone.id)?.kind == .ios }
         try await waitUntil { try pair.phone.store.peer(id: pair.mac.id)?.kind == .mac }
         #expect(SyncRole.dialTargets(myDeviceID: pair.mac.id, peers: try pair.mac.store.peers()).isEmpty)
 

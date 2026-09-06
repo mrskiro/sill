@@ -197,7 +197,7 @@ extension CaptureFlowTests {
             let a = try makeSide("Mac A")
             let b = try makeSide("Mac B")
             let phoneStore = try NoteStore(
-                database: try AppDatabase.inMemory(), deviceName: "Test iPhone", deviceKind: .phone)
+                database: try AppDatabase.inMemory(), deviceName: "Test iPhone", deviceKind: .ios)
             let phoneIdentityStore = IdentityStore(label: "com.mrskiro.sill.test-phone.\(UUID().uuidString)")
             let phoneIdentity = try phoneIdentityStore.loadOrCreate(deviceID: phoneStore.deviceID)
             let phoneClient = SyncClient(store: phoneStore)

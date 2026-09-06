@@ -27,7 +27,7 @@ extension CaptureFlowTests {
 
             // An in-process stand-in for the phone.
             let phoneStore = try NoteStore(
-                database: try AppDatabase.inMemory(), deviceName: "Test iPhone", deviceKind: .phone)
+                database: try AppDatabase.inMemory(), deviceName: "Test iPhone", deviceKind: .ios)
             let phoneIdentityStore = IdentityStore(label: "com.mrskiro.sill.test-phone.\(UUID().uuidString)")
             defer { try? phoneIdentityStore.delete() }
             let phoneIdentity = try phoneIdentityStore.loadOrCreate(deviceID: phoneStore.deviceID)
