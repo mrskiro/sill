@@ -64,6 +64,8 @@ final class PhoneModel {
 
     /// `devicectl … launch -e '{"SILL_AUTOTEST_NOTE": "…"}'` creates a note on launch so a
     /// real-device sync check can run without anyone typing on the phone.
+    /// `SILL_AUTOTEST_SCREEN=list|sync` lands on that screen instead of the last note, for
+    /// `scripts/app-store-screenshots.sh`, which has no way to tap.
     private func applyAutotestHooks() {
         let environment = ProcessInfo.processInfo.environment
         if let content = environment["SILL_AUTOTEST_NOTE"], !content.isEmpty {
@@ -71,6 +73,13 @@ final class PhoneModel {
                 SyncLog.write("autotest: created note \(note.id)")
                 sync?.localChanged()
             }
+        }
+        switch environment["SILL_AUTOTEST_SCREEN"] {
+        case "list": path = []
+        case "sync":
+            path = []
+            showPairing = true
+        default: break
         }
     }
 
