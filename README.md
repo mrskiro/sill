@@ -31,7 +31,7 @@ make lint       # swift-format（設定は .swift-format）。make format で整
 ## CI / Release
 
 - CI（`.github/workflows/ci.yml`）: macOS 26 ランナー（その時点で最新の Xcode 26.x）で hygiene 走査、swift-format の lint、SillCore の `swift test`、Mac / iOS simulator のビルド。失敗時は xcresult を artifact に残す。署名と実機が要るホスト型テストはローカルの `make test` で回す。
-- Release（`.github/workflows/release.yml`）: `vX.Y.Z` タグで Developer ID 署名 + 公証済みの Mac アプリ（と SHA-256）を GitHub Release に添付する。Secrets（Developer ID 証明書、App Store Connect API キー、Team ID）を設定するまで動かない。詳細はワークフロー冒頭のコメント。
+- Release（`.github/workflows/release.yml`）: `vX.Y.Z` タグで Developer ID 署名 + 公証済みの Mac アプリ（と SHA-256）を GitHub Release に添付する。Secrets（Developer ID 証明書、Developer ID の provisioning profile、App Store Connect API キー、Team ID）を設定するまで動かない。profile が要るのは `keychain-access-groups` が `application-identifier` を要求するためで、これは cloud signing では発行できないので手動署名で export する。詳細はワークフロー冒頭のコメント。
 - Actions は SHA 固定を必須にしている。Dependabot が actions と SwiftPM を週次で更新する。
 
 ## License
