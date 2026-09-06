@@ -1,6 +1,6 @@
 # Sill — 作業規約（Claude Code 向け）
 
-設計と現状は `docs/design.md`、Mac の配布（署名・公証・dmg）は `docs/distribution.md`。ここは「どう作業するか」だけ。
+設計と現状は `docs/design.md`。ここは「どう作業するか」だけ。
 
 ## 原則
 
