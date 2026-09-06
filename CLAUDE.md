@@ -20,6 +20,14 @@
 - 実機: `make device-check DEVICE=<id>`（`xcrun devicectl list devices`）。iPhone はロック解除が必要。Mac アプリを `SILL_DEBUG=1` で起動して `sill://debug/...` を使う。
 - 両アプリは `Application Support/Sill/sync.log` に同期の経過を残す。iPhone 側は `xcrun devicectl device copy from --domain-type appDataContainer --domain-identifier com.mrskiro.sill --source "Library/Application Support/Sill/sync.log"` で取れる。
 
+## リリース
+
+- `vX.Y.Z` タグを push すると `.github/workflows/release.yml` が Developer ID 署名 + 公証済みの dmg を Release に添付する。
+- export は**手動署名**。cloud signing は Developer ID の provisioning profile を発行できない（Admin の API キーでも `Cloud signing permission error`）。profile が要るのは `keychain-access-groups` が `application-identifier` を要求するためで、普通の Developer ID アプリはここを踏まない。profile は secret から復元し、UUID はファイル自身から読む。
+- アプリと dmg の**両方**を公証して staple する。dmg だけだと、そこから取り出したアプリはチケットを持たず、オフラインで初回起動できない。
+- 配布を zip にしない。`~/Downloads` に置いたまま開くと App Translocation でランダムな読み取り専用パスから動く。dmg の `/Applications` リンクへのドラッグが quarantine を外す。
+- 署名証明書を更新すると発行元が G1 → G2 に変わる。ワークフローは両方の中間証明書を入れてある。
+
 ## 落とし穴
 
 - `xcode-select -p` が CommandLineTools を向いている環境では、`DEVELOPER_DIR` に Xcode 26.6 以上の `Contents/Developer` を渡すか `sudo xcode-select -s <Xcode.app>` する。
@@ -30,3 +38,6 @@
 - 並行して動く Homebrew メンテナンスが `xcodegen` を消したことがある。`brew install xcodegen` で戻す。
 - NSTextView の undo は連続入力を 1 まとめにする AppKit 標準の粒度。テストで 1 手ずつは戻らない。
 - swift-format は属性行末のコメントを嫌う。コメントは属性の上に置く。
+- `PROVISIONING_PROFILE_SPECIFIER` を xcodebuild のコマンドラインで渡さない。全ターゲットに効くので SwiftPM の依存が `does not support provisioning profiles` で落ちる。手動署名は export options plist 側で指定する。
+- 証明書と秘密鍵が別のキーチェーンにあると、identity は `security find-identity` では見えるのに Keychain Access の「自分の証明書」には出ない（GUI は同じキーチェーンで組めるものだけを出す）。`.p12` を書き出す前にキーチェーンごとに `security find-identity -v -p codesigning <keychain>` で確認する。
+- `spctl` でアプリを評価するときは `--type execute`。`-t install` はインストーラパッケージ用で、別のポリシーを見ることになる。
