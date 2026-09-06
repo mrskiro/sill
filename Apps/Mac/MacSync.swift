@@ -106,10 +106,13 @@ final class MacSync {
     }
 
     func unpair(_ id: DeviceID) {
+        // Only the dialled peer's session has to go: unpairing the phone must not tear down a
+        // healthy Mac-to-Mac session that has nothing to do with it.
+        let wasDialled = dialer.connectedPeer?.id == id || dialer.targets.contains { $0.id == id }
         try? store.removePeer(id: id)
         refreshPeers()
         Task { [server] in await server.revoke(peerID: id) }
-        updateDialTargets(restart: true)  // drops the session too, if that is the peer we were dialling
+        updateDialTargets(restart: wasDialled)
     }
 
     /// Devices with a session open right now, either end.
@@ -133,10 +136,13 @@ final class MacSync {
         case .paired:
             pairingPayload = nil
             refreshPeers()
+            dialer.clearFailure()
             updateDialTargets()
         case .synced(let peer, let changed):
             lastSyncAt = peer.lastSyncAt
             refreshPeers()
+            // A peer that reached us on its own settles whatever a failed dial had to say.
+            dialer.clearFailure()
             // Relay: what this peer just sent us has to reach the Mac we dial as well.
             if changed { dialer.localChanged() }
         }

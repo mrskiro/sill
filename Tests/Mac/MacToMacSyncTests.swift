@@ -4,6 +4,7 @@ import SillCore
 import Testing
 
 @testable import Sill
+@testable import SillCore
 
 /// Two Macs in one process, each with its own store, identity, listener and dialler, talking over
 /// 127.0.0.1 with the real TLS stack. Bonjour discovery is exercised on real devices.
@@ -152,6 +153,44 @@ extension CaptureFlowTests {
             #expect(side.sync.dialer.failure == "that code is from this Mac")
         }
 
+        /// A dial that fails for good (the other Mac is on an older protocol) must not wedge the
+        /// dialler: the next peer change has to start it again, and a peer that reaches us on its
+        /// own has to clear the failure the status line is showing.
+        @Test func aDialThatFailedForGoodDoesNotWedgeTheDialler() async throws {
+            let a = try makeSide("Mac A")
+            let b = try makeSide("Mac B")
+            defer {
+                a.sync.stop()
+                b.sync.stop()
+                try? a.identityStore.delete()
+                try? b.identityStore.delete()
+            }
+            a.sync.start()
+            b.sync.start()
+            try await waitUntil { a.sync.port != nil && b.sync.port != nil }
+            a.sync.dialer.endpointOverride = endpoint(b.sync.port!)
+            await a.sync.dialer.client.useHelloProtocolVersion(SyncMessage.protocolVersion + 1)
+
+            a.sync.pair(with: await b.sync.beginPairing())
+            try await waitUntil { a.sync.dialer.failure != nil }
+            #expect(a.sync.dialer.isDialling == false)
+            #expect(a.sync.statusText.hasPrefix("Sync failed:"))
+
+            // Pairing stored the peer on both sides before the handshake failed.
+            #expect(a.sync.peers.map(\.name) == ["Mac B"])
+            let peerB = try #require(a.sync.peers.first)
+            a.sync.dialer.setTargets([peerB])
+            #expect(a.sync.dialer.isDialling)
+
+            // Mac B, now that it can be understood, reaches Mac A on its own: no failure left over.
+            await a.sync.dialer.client.useHelloProtocolVersion(SyncMessage.protocolVersion)
+            a.sync.dialer.stop()
+            b.sync.dialer.endpointOverride = endpoint(a.sync.port!)
+            b.sync.dialer.restart(targets: try b.store.peers())
+            try await waitUntil { a.sync.dialer.failure == nil }
+            #expect(a.sync.connections == 1)
+        }
+
         /// The relay: a phone paired with one Mac sees what is written on the other, and back.
         @Test func aPhonePairedWithOneMacSyncsThroughItWithTheOther() async throws {
             let a = try makeSide("Mac A")
@@ -196,6 +235,12 @@ extension CaptureFlowTests {
             let fromPhone = try phoneStore.createNote(content: "written on the phone")
             await phoneClient.localChanged()
             try await waitUntil { try b.store.note(id: fromPhone.id)?.content == "written on the phone" }
+
+            // Unpairing the phone is none of the dialler's business: the Mac-to-Mac session stays.
+            let dialling = a.sync.dialer.connectedPeer == nil ? b : a
+            #expect(dialling.sync.dialer.connectedPeer != nil)
+            a.sync.unpair(phoneStore.deviceID)
+            #expect(dialling.sync.dialer.connectedPeer != nil)
 
             phoneTask.cancel()
             _ = try? await phoneTask.value

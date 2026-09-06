@@ -71,6 +71,7 @@ final class MacDialer {
 
     func stop() {
         isRunning = false
+        isPairingDial = false
         loopTask?.cancel()
         loopTask = nil
         connectedPeer = nil
@@ -94,6 +95,12 @@ final class MacDialer {
     /// Whether a loop is looking for, or holding, a session right now.
     var isDialling: Bool { loopTask != nil }
 
+    /// A dial that failed is not worth reporting once the peer has reached us by other means
+    /// (it dialled us instead, or it was updated and paired again).
+    func clearFailure() {
+        failure = nil
+    }
+
     /// After a local write: start a round if a session is open.
     func localChanged() {
         Task { [client] in await client.localChanged() }
@@ -102,8 +109,15 @@ final class MacDialer {
     // MARK: - Internals
 
     private func run(generation: Int) async {
-        // Only the loop that still owns `loopTask` may clear it; a restarted loop must not be clobbered.
-        defer { if loopGeneration == generation { loopTask = nil } }
+        // Only the loop that still owns `loopTask` may clear it; a restarted loop must not be
+        // clobbered. Leaving the loop for good (cancelled, or a version mismatch) has to clear the
+        // pairing flag too, or `setTargets` would refuse to wake anything ever again.
+        defer {
+            if loopGeneration == generation {
+                isPairingDial = false
+                loopTask = nil
+            }
+        }
         var backoff: Duration = .seconds(1)
         while !Task.isCancelled {
             let pairing = pendingPairing
