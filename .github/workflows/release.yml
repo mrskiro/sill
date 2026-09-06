@@ -52,9 +52,22 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
           echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
           security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$P12_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
-          security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
-          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
           rm "$RUNNER_TEMP/cert.p12"
+          # A leaf that does not chain is not a *valid* identity, and only valid ones are offered
+          # to codesign — which exportArchive reports as "No signing certificate found". A .p12
+          # exported from Keychain Access carries the leaf and key but not always its issuer.
+          # Both generations: the current certificate is G1 (expires 2027-02-01), a renewed one
+          # will be G2, and importing the wrong one alone would leave the chain broken.
+          for CA in DeveloperIDCA DeveloperIDG2CA; do
+            curl -fsSL "https://www.apple.com/certificateauthority/$CA.cer" -o "$RUNNER_TEMP/$CA.cer"
+            security import "$RUNNER_TEMP/$CA.cer" -k "$KEYCHAIN" -T /usr/bin/codesign
+          done
+          # codesign: is what lets codesign reach the private key without a UI prompt.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security default-keychain -d user -s "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" login.keychain-db
+          # Print what is actually usable, so a signing failure below is diagnosable from the log.
+          security find-identity -v -p codesigning
 
       - name: App Store Connect API key
         env:
