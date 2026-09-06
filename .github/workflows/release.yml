@@ -10,6 +10,10 @@
 #                                 notarizes fine but fails the export with "No profiles were found".
 #   ASC_API_KEY_P8                the .p8 contents, base64-encoded
 #   MACOS_CERTIFICATE_P12         "Developer ID Application" certificate + key, .p12 base64-encoded
+#   MACOS_PROVISION_PROFILE       the "Developer ID" .provisionprofile, base64-encoded. Made once in
+#                                 the portal (Profiles › Developer ID) and good until 2044; the app
+#                                 needs it because keychain-access-groups implies
+#                                 application-identifier, which only a profile can grant.
 #   MACOS_CERTIFICATE_PASSWORD    password of that .p12
 name: Release
 
@@ -59,6 +63,25 @@ jobs:
           mkdir -p "$RUNNER_TEMP/asc"
           echo "$ASC_API_KEY_P8" | base64 --decode > "$RUNNER_TEMP/asc/AuthKey.p8"
 
+      - name: Install the Developer ID provisioning profile
+        env:
+          PROFILE_BASE64: ${{ secrets.MACOS_PROVISION_PROFILE }}
+        run: |
+          PROFILE="$RUNNER_TEMP/sill.provisionprofile"
+          echo "$PROFILE_BASE64" | base64 --decode > "$PROFILE"
+          # Read the identity out of the file rather than hard-coding it, so regenerating the
+          # profile in the portal cannot silently sign the wrong thing.
+          PLIST=$(security cms -D -i "$PROFILE")
+          UUID=$(printf '%s' "$PLIST" | plutil -extract UUID raw -o - -)
+          echo "profile $(printf '%s' "$PLIST" | plutil -extract Name raw -o - -) expires $(printf '%s' "$PLIST" | plutil -extract ExpirationDate raw -o - -)"
+          # Xcode 16+ reads the first path; the second is where older toolchains look.
+          for DIR in "$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles" \
+                     "$HOME/Library/MobileDevice/Provisioning Profiles"; do
+            mkdir -p "$DIR"
+            cp "$PROFILE" "$DIR/$UUID.provisionprofile"
+          done
+          echo "PROFILE_UUID=$UUID" >> "$GITHUB_ENV"
+
       - name: Archive and export (Developer ID)
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
@@ -79,14 +102,18 @@ jobs:
           <plist version="1.0"><dict>
             <key>method</key><string>developer-id</string>
             <key>teamID</key><string>$APPLE_TEAM_ID</string>
-            <key>signingStyle</key><string>automatic</string>
+            <key>signingStyle</key><string>manual</string>
+            <key>signingCertificate</key><string>Developer ID Application</string>
+            <key>provisioningProfiles</key><dict>
+              <key>com.mrskiro.sill</key><string>$PROFILE_UUID</string>
+            </dict>
           </dict></plist>
           PLIST
+          # Manual, and without the API key: Xcode's cloud signing refuses to mint a Developer ID
+          # profile for this key ("Cloud signing permission error"), and it has nothing to do here
+          # now that the profile is installed above.
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Sill.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" -quiet \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" -exportPath "$RUNNER_TEMP/export" -quiet
 
       - name: Notarize and staple
         env:
