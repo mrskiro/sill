@@ -155,4 +155,18 @@ import Testing
         #expect(second.deviceID == first.deviceID)
         #expect(second.deviceName == "Mac renamed")
     }
+
+    /// An app from before `kind` existed says hello without one. That must not erase what an
+    /// updated peer already told us.
+    @Test func aHelloWithoutAKindLeavesTheKnownOneAlone() throws {
+        let store = try NoteStore(database: try AppDatabase.inMemory(), deviceName: "Mac")
+        let peerID = UUID()
+        let fingerprint = Data(repeating: 3, count: 32)
+        try store.addPeer(id: peerID, name: "iPhone", fingerprint: fingerprint, kind: .phone)
+        #expect(try store.peer(id: peerID)?.kind == .phone)
+
+        try store.addPeer(id: peerID, name: "iPhone renamed", fingerprint: fingerprint)
+        #expect(try store.peer(id: peerID)?.kind == .phone)
+        #expect(try store.peer(id: peerID)?.name == "iPhone renamed")
+    }
 }

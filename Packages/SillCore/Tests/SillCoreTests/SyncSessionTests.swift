@@ -14,7 +14,7 @@ import Testing
 
         init() throws {
             mac = try Replica("Mac")
-            phone = try Replica("iPhone")
+            phone = try Replica("iPhone", kind: .phone)
             server = SyncServer(store: mac.store)
             client = SyncClient(store: phone.store)
             macCertificate = try DeviceCertificate.generate(deviceID: mac.id)
@@ -65,6 +65,22 @@ import Testing
         session.channels.0.close()
         _ = try? await session.server.value
         _ = try? await session.client.value
+    }
+
+    /// Each side learns what the other is from `hello`, so a Mac knows not to spend the rest of
+    /// its life browsing for a phone that never advertises.
+    @Test func helloTellsEachSideWhatTheOtherIs() async throws {
+        let pair = try Pair()
+        try pair.pairDirectly()
+        #expect(try pair.mac.store.peer(id: pair.phone.id)?.kind == nil)
+        let session = pair.connect()
+
+        try await waitUntil { try pair.mac.store.peer(id: pair.phone.id)?.kind == .phone }
+        try await waitUntil { try pair.phone.store.peer(id: pair.mac.id)?.kind == .mac }
+        #expect(SyncRole.dialTargets(myDeviceID: pair.mac.id, peers: try pair.mac.store.peers()).isEmpty)
+
+        session.channels.0.close()
+        _ = await (session.server.result, session.client.result)
     }
 
     @Test func wrongTokenIsRejected() async throws {

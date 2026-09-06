@@ -187,15 +187,17 @@ extension CaptureFlowTests {
             a.sync.dialer.stop()
             b.sync.dialer.endpointOverride = endpoint(a.sync.port!)
             b.sync.dialer.restart(targets: try b.store.peers())
+            // Mac B may hand the dialling straight back if its id says so, so the session is not
+            // the thing to assert on — the failure being gone is.
             try await waitUntil { a.sync.dialer.failure == nil }
-            #expect(a.sync.connections == 1)
         }
 
         /// The relay: a phone paired with one Mac sees what is written on the other, and back.
         @Test func aPhonePairedWithOneMacSyncsThroughItWithTheOther() async throws {
             let a = try makeSide("Mac A")
             let b = try makeSide("Mac B")
-            let phoneStore = try NoteStore(database: try AppDatabase.inMemory(), deviceName: "Test iPhone")
+            let phoneStore = try NoteStore(
+                database: try AppDatabase.inMemory(), deviceName: "Test iPhone", deviceKind: .phone)
             let phoneIdentityStore = IdentityStore(label: "com.mrskiro.sill.test-phone.\(UUID().uuidString)")
             let phoneIdentity = try phoneIdentityStore.loadOrCreate(deviceID: phoneStore.deviceID)
             let phoneClient = SyncClient(store: phoneStore)

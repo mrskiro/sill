@@ -7,9 +7,9 @@ struct Replica {
     let name: String
     let store: NoteStore
 
-    init(_ name: String) throws {
+    init(_ name: String, kind: DeviceKind = .current) throws {
         self.name = name
-        store = try NoteStore(database: try AppDatabase.inMemory(), deviceName: name)
+        store = try NoteStore(database: try AppDatabase.inMemory(), deviceName: name, deviceKind: kind)
     }
 
     var id: DeviceID { store.deviceID }

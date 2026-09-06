@@ -80,6 +80,11 @@ public struct AppDatabase: Sendable {
                     CREATE UNIQUE INDEX note_origin ON note(origin_device, origin_seq);
                     """)
         }
+        // What kind of device a peer is, learned from `hello`. Null until it says so, which is
+        // also what every row written before this migration looks like.
+        migrator.registerMigration("v3-peer-kind") { db in
+            try db.execute(sql: "ALTER TABLE peer ADD COLUMN kind TEXT")
+        }
         return migrator
     }
 }

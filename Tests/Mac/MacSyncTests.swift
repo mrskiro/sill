@@ -26,7 +26,8 @@ extension CaptureFlowTests {
             #expect(sync.statusText == "Not paired")
 
             // An in-process stand-in for the phone.
-            let phoneStore = try NoteStore(database: try AppDatabase.inMemory(), deviceName: "Test iPhone")
+            let phoneStore = try NoteStore(
+                database: try AppDatabase.inMemory(), deviceName: "Test iPhone", deviceKind: .phone)
             let phoneIdentityStore = IdentityStore(label: "com.mrskiro.sill.test-phone.\(UUID().uuidString)")
             defer { try? phoneIdentityStore.delete() }
             let phoneIdentity = try phoneIdentityStore.loadOrCreate(deviceID: phoneStore.deviceID)

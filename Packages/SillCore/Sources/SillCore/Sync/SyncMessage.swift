@@ -33,14 +33,20 @@ public enum SyncMessage: Codable, Sendable, Equatable {
         public var name: String
         public var protocolVersion: Int
         public var vector: VersionVector
+        /// Optional on the wire: an app from before this field simply leaves it out, and the peer
+        /// keeps treating its kind as unknown. Adding it needs no protocol version bump; raising
+        /// the version would instead cut off every app that has not been updated yet.
+        public var kind: DeviceKind?
 
         public init(
-            deviceID: DeviceID, name: String, protocolVersion: Int = SyncMessage.protocolVersion, vector: VersionVector
+            deviceID: DeviceID, name: String, protocolVersion: Int = SyncMessage.protocolVersion,
+            vector: VersionVector, kind: DeviceKind? = nil
         ) {
             self.deviceID = deviceID
             self.name = name
             self.protocolVersion = protocolVersion
             self.vector = vector
+            self.kind = kind
         }
     }
 
@@ -74,12 +80,18 @@ public struct Peer: Equatable, Sendable, Identifiable {
     public var fingerprint: Data
     public var pairedAt: Date
     public var lastSyncAt: Date?
+    /// Nil until the peer has said hello with a version of the app that reports it.
+    public var kind: DeviceKind?
 
-    public init(id: DeviceID, name: String, fingerprint: Data, pairedAt: Date, lastSyncAt: Date? = nil) {
+    public init(
+        id: DeviceID, name: String, fingerprint: Data, pairedAt: Date, lastSyncAt: Date? = nil,
+        kind: DeviceKind? = nil
+    ) {
         self.id = id
         self.name = name
         self.fingerprint = fingerprint
         self.pairedAt = pairedAt
         self.lastSyncAt = lastSyncAt
+        self.kind = kind
     }
 }
