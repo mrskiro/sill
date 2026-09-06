@@ -41,6 +41,28 @@ import Testing
         #expect(try mac.store.changes(since: try phone.store.vector()).isEmpty)
     }
 
+    /// A relay Mac forwards a round only when it applied something, so `changedAnything` has to
+    /// count the conflicts that rewrite the local row without leaving a copy behind — a deletion
+    /// losing to a concurrent edit is the common one.
+    @Test func aConflictThatRewritesTheRowCountsAsChanged() throws {
+        let mac = try Replica("Mac")
+        let phone = try Replica("iPhone")
+        let note = try mac.store.createNote(content: "keep me", now: at(0))
+        try SyncRound.run(client: phone, server: mac)
+
+        try mac.store.deleteNote(id: note.id, now: at(10))
+        try phone.store.updateNote(id: note.id, content: "still wanted", now: at(20))
+        let results = try SyncRound.run(client: phone, server: mac)
+
+        // The live edit wins over the tombstone, and no conflict copy is made.
+        #expect(results.server.conflicts == 1)
+        #expect(results.server.conflictCopies == 0)
+        #expect(results.server.inserted + results.server.overwritten == 0)
+        #expect(results.server.changedAnything)
+        #expect(try mac.store.note(id: note.id)?.content == "still wanted")
+        #expect(try ApplyResult().changedAnything == false)
+    }
+
     @Test func concurrentEditsKeepBothTextsAndConverge() throws {
         let mac = try Replica("Mac")
         let phone = try Replica("iPhone")

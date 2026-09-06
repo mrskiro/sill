@@ -8,7 +8,7 @@ import SwiftUI
 struct PairingView: View {
     let sync: MacSync
     @State private var pastedCode = ""
-    @State private var invalidCode = false
+    @State private var codeError: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -35,8 +35,8 @@ struct PairingView: View {
             HStack {
                 Button("Pair") { pair() }
                     .disabled(pastedCode.isEmpty)
-                if invalidCode {
-                    Text("That is not a Sill pairing code.")
+                if let codeError {
+                    Text(codeError)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
@@ -71,10 +71,14 @@ struct PairingView: View {
         guard let payload = PairingPayload(qrString: pastedCode.trimmingCharacters(in: .whitespacesAndNewlines))
         else {
             SyncLog.write("mac: invalid pairing code (\(pastedCode.count) chars)")
-            invalidCode = true
+            codeError = "That is not a Sill pairing code."
             return
         }
-        invalidCode = false
+        guard payload.deviceID != sync.store.deviceID else {
+            codeError = "That code is from this Mac."
+            return
+        }
+        codeError = nil
         pastedCode = ""
         sync.pair(with: payload)
     }

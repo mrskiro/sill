@@ -225,7 +225,7 @@ client: 1 トランザクションで適用 + seen = max(seen, serverVector)
 
 round のトリガー: 接続直後 / client の autosave 後 1 秒 / server からの `poke`。round 中のトリガーは終了後にもう 1 round。
 
-**中継**: Mac A が iPhone を serve しつつ Mac B を dial している構成では、片方の接続で入った変更をもう片方へ押し出す必要がある。`synced` イベントに `changed`（その round で実際に適用があったか）を載せ、true のときだけ反対側に `poke` / `localChanged` を出す（`MacSync.handle`）。空の round で poke し合うと無限に往復するので、この条件が要る。
+**中継**: Mac A が iPhone を serve しつつ Mac B を dial している構成では、片方の接続で入った変更をもう片方へ押し出す必要がある。`synced` イベントに `changed`（その round で実際に適用があったか = `ApplyResult.changedAnything`）を載せ、true のときだけ反対側に `poke` / `localChanged` を出す（`MacSync.handle`）。空の round で poke し合うと無限に往復するので、この条件が要る。`conflicts` も数に入れる: 競合解決は複製を作らなくてもローカル行を書き換えることがあり（tombstone に live が勝つ等）、落とすと中継がそこで止まる。多めに数えて余分な空 round が 1 回走る方が安全。
 
 順序の意味: client の変更が **先に適用される**ので、server が返す `serverVector` は client の全 version を含む。client 側では server の行が「自分の行の子孫」と判定され、通常は server だけが競合を解決する。
 
@@ -371,6 +371,7 @@ sill/
 - Sync 状態の UI（Mac ヘッダー / iOS 下部バー）の文言と更新頻度の見直し。
 - `PhoneSync` と `MacDialer` の dial ループ（browse → connect → バックオフ）はほぼ同じ。3 つ目が要るときに `SillCore` へ寄せる。今は片方が foreground 依存、もう片方が `SyncRole` 依存で、共通化しても得が小さい。
 - 2 台の Mac での実運用確認: 実機同士で Bonjour 発見、初回の Local Network 許可（Mac が browse するのは今回が初めて）、スリープ復帰後の再接続。
+- `peer` に端末種別を持たせる。今は種別が分からないので、iPhone の id が自分より大きい Mac は「絶対に現れないサービス」を browse し続ける（実害は無いが無駄で、Local Network 許可も要らないところで出る）。`hello` にフィールドを足す = protocolVersion 更新なので、次の版で。
 
 ## 16. 将来の拡張方向（設計上の制約として意識するもの。MVP では作らない）
 

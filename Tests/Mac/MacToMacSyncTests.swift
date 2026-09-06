@@ -114,6 +114,44 @@ extension CaptureFlowTests {
             #expect(a.sync.peers.isEmpty)
         }
 
+        /// A dialler with nothing to look for has to wake up when a peer appears: the loop parks in
+        /// a Bonjour browse that never returns, so a changed target list has to restart it.
+        @Test func aDiallerWithNothingToDialWakesWhenATargetAppears() async throws {
+            let side = try makeSide("Mac A")
+            defer {
+                side.sync.stop()
+                try? side.identityStore.delete()
+            }
+            // Nothing listens on discard: the loop fails fast instead of browsing during the test.
+            side.sync.dialer.endpointOverride = endpoint(9)
+            side.sync.start()
+            #expect(side.sync.dialer.isDialling == false)
+
+            let peer = Peer(
+                id: UUID(uuidString: "FFFFFFFF-FFFF-FFFF-FFFF-FFFFFFFFFFFF")!, name: "Mac B",
+                fingerprint: Data(repeating: 2, count: 32), pairedAt: Date())
+            side.sync.dialer.setTargets([peer])
+            #expect(side.sync.dialer.isDialling)
+        }
+
+        /// The paste field and the code are on screen together, so a code from this very Mac is
+        /// one clipboard slip away — and every identity check downstream would compare it to itself.
+        @Test func aMacRefusesItsOwnPairingCode() async throws {
+            let side = try makeSide("Mac A")
+            defer {
+                side.sync.stop()
+                try? side.identityStore.delete()
+            }
+            side.sync.start()
+            try await waitUntil { side.sync.port != nil }
+
+            side.sync.pair(with: await side.sync.beginPairing())
+
+            #expect(side.sync.peers.isEmpty)
+            #expect(side.sync.dialer.isDialling == false)
+            #expect(side.sync.dialer.failure == "that code is from this Mac")
+        }
+
         /// The relay: a phone paired with one Mac sees what is written on the other, and back.
         @Test func aPhonePairedWithOneMacSyncsThroughItWithTheOther() async throws {
             let a = try makeSide("Mac A")

@@ -140,7 +140,7 @@ public actor SyncServer {
                 pending = []
                 try await sendChanges(since: clientVector, over: channel)
                 try store.markSynced(peerID: peer.id)
-                let changed = applied.inserted + applied.overwritten + applied.conflictCopies > 0
+                let changed = applied.changedAnything
                 if let synced = try store.peer(id: peer.id) {
                     eventSink.yield(.synced(synced, changed: changed))
                 }

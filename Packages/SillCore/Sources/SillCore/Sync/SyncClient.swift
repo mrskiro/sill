@@ -7,6 +7,9 @@ import os
 public actor SyncClient {
     public let store: NoteStore
     private var events: AsyncStream<Event>.Continuation?
+    /// One client can run sessions back to back (a reconnect). Only the session that still owns
+    /// `events` may clear it, or a slow teardown silences the session that replaced it.
+    private var sessionGeneration = 0
     private let log = Logger(subsystem: "com.mrskiro.sill", category: "sync-client")
 
     /// UI-facing notifications.
@@ -57,8 +60,10 @@ public actor SyncClient {
             sessionSink.yield(.ended)
         }
         let (stream, continuation) = AsyncStream<Event>.makeStream()
+        sessionGeneration += 1
+        let generation = sessionGeneration
         events = continuation
-        defer { events = nil }
+        defer { if sessionGeneration == generation { events = nil } }
         let pump = Task {
             do {
                 for try await message in channel.incoming { continuation.yield(.message(message)) }
@@ -141,8 +146,7 @@ public actor SyncClient {
                     pending, senderID: known.id, senderName: known.name, senderVector: vector)
                 try store.markSynced(peerID: known.id)
                 if let synced = try store.peer(id: known.id) {
-                    let changed = applied.inserted + applied.overwritten + applied.conflictCopies > 0
-                    sessionSink.yield(.synced(synced, changed: changed))
+                    sessionSink.yield(.synced(synced, changed: applied.changedAnything))
                 }
                 serverVector = vector
                 if roundRequested {

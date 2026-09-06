@@ -32,6 +32,8 @@ final class MacDialer {
     @ObservationIgnored private var loopGeneration = 0
     @ObservationIgnored private var eventTask: Task<Void, Never>?
     @ObservationIgnored private var pendingPairing: PairingPayload?
+    /// A pairing dial in flight: it carries a one-time token and must not be restarted away.
+    @ObservationIgnored private var isPairingDial = false
     @ObservationIgnored private(set) var targets: [Peer] = []
     @ObservationIgnored private let log = Logger(subsystem: "com.mrskiro.sill", category: "mac-dialer")
 
@@ -57,12 +59,14 @@ final class MacDialer {
         loopTask = Task { await self.run(generation: generation) }
     }
 
-    /// A new peer list without dropping the session in progress: the loop reads it on its next
-    /// turn, so a session that ends later reconnects to whoever is still a target. A loop that had
-    /// run out of targets has returned, so it needs starting again.
-    func setTargets(_ targets: [Peer]) {
-        self.targets = targets
-        if isRunning, loopTask == nil { restart(targets: targets) }
+    /// A new peer list, keeping the session in progress. A parked loop has to be restarted to see
+    /// it: `findServer` browses for the prefixes it was given and never returns on its own, so a
+    /// loop looking for a device that is not there would sit on the old list forever.
+    func setTargets(_ newTargets: [Peer]) {
+        let changed = newTargets.map(\.id) != targets.map(\.id)
+        targets = newTargets
+        guard isRunning, connectedPeer == nil, !isPairingDial else { return }
+        if changed || loopTask == nil { restart(targets: newTargets) }
     }
 
     func stop() {
@@ -73,12 +77,22 @@ final class MacDialer {
     }
 
     /// Pair with the Mac whose code was pasted: dial it once with the token, whatever `SyncRole` says.
+    /// A code from this very Mac is refused — every identity check downstream would compare this
+    /// device with itself and pass, leaving the Mac paired with, and syncing against, itself.
     func pair(with payload: PairingPayload) {
+        guard payload.deviceID != store.deviceID else {
+            SyncLog.write("mac: refused this Mac's own pairing code")
+            failure = "that code is from this Mac"
+            return
+        }
         SyncLog.write("mac: pairing with \(payload.name) fp=\(SillService.fingerprintPrefix(payload.fingerprint))")
         failure = nil
         pendingPairing = payload
         restart(targets: targets)
     }
+
+    /// Whether a loop is looking for, or holding, a session right now.
+    var isDialling: Bool { loopTask != nil }
 
     /// After a local write: start a round if a session is open.
     func localChanged() {
@@ -94,6 +108,7 @@ final class MacDialer {
         while !Task.isCancelled {
             let pairing = pendingPairing
             pendingPairing = nil
+            isPairingDial = pairing != nil
             let prefixes: Set<String> =
                 pairing.map { [SillService.fingerprintPrefix($0.fingerprint)] }
                 ?? Set(targets.map { SillService.fingerprintPrefix($0.fingerprint) })
@@ -125,6 +140,7 @@ final class MacDialer {
                 // out loud: nothing else on screen would explain why nothing happened.
                 if pairing != nil { failure = "pairing rejected" }
             }
+            isPairingDial = false
             try? await Task.sleep(for: backoff)
             backoff = min(backoff * 2, .seconds(30))
         }
