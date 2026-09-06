@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sill — Local-first Markdown notes for Mac and iPhone</title>
+<meta name="description" content="A small local-first Markdown notepad for Mac and iPhone. No account, no server. Your devices sync directly when they are near each other.">
+<meta property="og:title" content="Sill">
+<meta property="og:description" content="A small local-first Markdown notepad for Mac and iPhone. No account, no server.">
+<meta property="og:type" content="website">
+<link rel="icon" href="favicon.png" sizes="64x64" type="image/png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #FFFFFF;
+    --ink: #0A0A0A;
+    --muted: #737373;
+    --line: #E5E5E5;
+    --button: #0A0A0A;
+    --button-ink: #FFFFFF;
+    --mark-ground: #F0EFEA;
+    --mark-bar: #404046;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0A0A0A;
+      --ink: #F5F5F5;
+      --muted: #8A8A8A;
+      --line: #262626;
+      --button: #F5F5F5;
+      --button-ink: #0A0A0A;
+      --mark-ground: #232326;
+      --mark-bar: #EDEDF2;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 64px 24px 48px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--ink);
+    background: var(--bg);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: inherit; }
+  main { max-width: 32rem; margin: 0 auto; }
+  kbd {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace;
+    font-size: 0.9em;
+    padding: 0 0.35em;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    white-space: nowrap;
+  }
+
+  .brand { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 26px; font-weight: 600; letter-spacing: -0.01em; }
+  .mark { width: 28px; height: 28px; }
+  .tagline { text-align: center; color: var(--muted); margin: 10px 0 24px; }
+
+  .actions { display: flex; justify-content: center; gap: 10px; flex-wrap: wrap; }
+  .button {
+    display: inline-block; padding: 8px 18px; border-radius: 999px;
+    font-weight: 500; text-decoration: none; font-size: 14px;
+    background: var(--button); color: var(--button-ink); border: 1px solid var(--button);
+  }
+  .button.ghost { background: transparent; color: var(--ink); border-color: var(--line); }
+  .fine { text-align: center; color: var(--muted); font-size: 13px; margin: 14px 0 0; }
+
+  /* An illustration of the floating panel, not a screenshot. */
+  .panel { margin: 40px 0 48px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; }
+  .panel-bar { display: flex; gap: 6px; padding: 12px 12px 0; }
+  .panel-bar i { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--line); }
+  .panel-body { padding: 14px 20px 20px; white-space: pre-wrap; line-height: 1.65; }
+  .panel-body .dim { color: var(--muted); }
+  .panel-foot { display: flex; justify-content: space-between; padding: 8px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+
+  .features { margin: 0; padding: 0 16px; }
+  .features dt { font-weight: 600; margin-top: 20px; }
+  .features dd { margin: 2px 0 0; color: var(--muted); }
+
+  hr { border: 0; border-top: 1px solid var(--line); margin: 48px 0; }
+
+  .get dt { font-weight: 600; margin-top: 20px; }
+  .get dd { margin: 2px 0 0; color: var(--muted); }
+  .get { padding: 0 16px; }
+  pre {
+    margin: 10px 0 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: 8px;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 12.5px; line-height: 1.6;
+    color: var(--ink); overflow-x: auto;
+  }
+
+  footer { margin-top: 96px; text-align: center; font-size: 13px; color: var(--muted); }
+  footer nav { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 16px; }
+  footer a { text-decoration: none; }
+  footer a:hover { text-decoration: underline; }
+  footer p { margin: 14px 0 0; }
+</style>
+</head>
+<body>
+<main>
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 64 64" aria-hidden="true">
+      <rect width="64" height="64" rx="14" fill="var(--mark-ground)" stroke="var(--line)"/>
+      <rect x="14" y="36" width="36" height="4" rx="1" fill="var(--mark-bar)"/>
+    </svg>
+    Sill
+  </div>
+  <p class="tagline">A small local-first Markdown notepad for Mac and iPhone.<br>No account. No server.</p>
+  <div class="actions">
+    <a class="button ghost" href="https://github.com/mrskiro/sill">GitHub</a>
+    <a class="button" href="https://github.com/mrskiro/sill/releases/latest">Download for Mac</a>
+  </div>
+  <p class="fine">Free, open source (MIT). macOS 26 or later.</p>
+
+  <div class="panel" aria-hidden="true">
+    <div class="panel-bar"><i></i><i></i><i></i></div>
+    <div class="panel-body"># Tuesday
+
+- [x] Move the sync log link into Help
+- [ ] Ask about the office Wi-Fi
+- [ ] Return the library book
+
+<span class="dim">Plain Markdown. Nothing gets rewritten.</span></div>
+    <div class="panel-foot"><span>Synced with iPhone just now</span><span>⌥S</span></div>
+  </div>
+
+  <dl class="features">
+    <dt>Fast</dt>
+    <dd><kbd>⌥S</kbd> opens a floating panel over whatever you are doing. <kbd>Esc</kbd> hides it.</dd>
+    <dt>Local-first</dt>
+    <dd>Notes live in a single SQLite file on your device. Nothing waits on a network.</dd>
+    <dt>Direct sync</dt>
+    <dd>Pair once with a QR code. Your iPhone and Mac sync over mutual TLS when they are near each other.</dd>
+    <dt>Plain Markdown</dt>
+    <dd>No smart quotes, no auto-capitalization. What you type is what is stored.</dd>
+    <dt>Quiet</dt>
+    <dd>No menu bar icon, no background updater. It checks for updates only when you ask.</dd>
+  </dl>
+
+  <hr>
+
+  <dl class="get">
+    <dt>Mac</dt>
+    <dd>Download the disk image and drag Sill to Applications. Signed and notarized.</dd>
+    <dt>iPhone</dt>
+    <dd>Not on the App Store yet. Build from source with Xcode 26.6 or later, then pair from the Mac's Settings.
+      <pre>git clone https://github.com/mrskiro/sill
+cd sill &amp;&amp; brew install xcodegen &amp;&amp; make gen
+open Sill.xcodeproj   # run the SillPhone scheme</pre>
+    </dd>
+  </dl>
+
+  <footer>
+    <nav>
+      <a href="https://github.com/mrskiro/sill">Source</a>
+      <a href="https://github.com/mrskiro/sill/releases">Releases</a>
+      <a href="https://github.com/mrskiro/sill/issues/new/choose">Report an issue</a>
+    </nav>
+    <p>© 2026 Sill · MIT License</p>
+  </footer>
+</main>
+</body>
+</html>
