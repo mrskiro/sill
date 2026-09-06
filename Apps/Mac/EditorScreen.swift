@@ -7,10 +7,12 @@ struct EditorScreen: View {
     var onEscape: () -> Void
     var onNewNote: () -> Void = {}
 
+    private static let headerHeight: CGFloat = 30
+
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider()
+        // The sidebar's material bleeds up into the transparent title-bar band, so the
+        // header has to be painted after it — a VStack would leave it buried underneath.
+        ZStack(alignment: .top) {
             HStack(spacing: 0) {
                 if model.isSidebarVisible {
                     SidebarView(model: model)
@@ -18,6 +20,11 @@ struct EditorScreen: View {
                     Divider()
                 }
                 EditorTextView(model: model, onEscape: onEscape)
+            }
+            .padding(.top, Self.headerHeight + 1)  // + the header's divider
+            VStack(spacing: 0) {
+                header
+                Divider()
             }
         }
         .frame(minWidth: 320, minHeight: 200)
@@ -53,6 +60,6 @@ struct EditorScreen: View {
         .font(.caption)
         .foregroundStyle(.secondary)
         .padding(.horizontal, 12)
-        .frame(height: 30)
+        .frame(height: Self.headerHeight)
     }
 }
