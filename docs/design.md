@@ -352,15 +352,24 @@ sill/
 
 テスト方針: SillCore は `swift test`（同期セッションはメモリ内チャネルで、識別は swift-certificates の証明書で検証）。実機は `scripts/device-sync-check.sh`: Mac を `SILL_DEBUG=1` で起動して `sill://debug/...` で操作し、iPhone は `devicectl` の環境変数でノートを作らせ、両 DB（iPhone 側は `devicectl device copy from` で取得）で到達を確認する。両アプリは `Application Support/Sill/sync.log` に同期の経過を残す。ホスト型テストでは 127.0.0.1 上で本物の相互 TLS（pinning）を張り、アプリの listener / client と結合した端末間フローまで通す。Mac の UI 挙動は Sill.app 内で動くホスト型テスト（`Tests/Mac`）で、NSTextView に実際のキーイベントを流して検証する。iOS も同様に simulator 上の Sill.app 内で動くホスト型テスト（`Tests/iOS`）で、UITextView の `insertText` 経路（実キーボードと同じ）を通す。`SILL_TEST_MODE=1` で使い捨て DB を使い、Mac ではパネルが key にならず accessory ポリシーで起動する（他アプリへの入力を奪わない）。XcodeGen の sources は `syncedFolder` にしてあり、ファイル追加で再生成は不要。
 
-## 15. 次にやること（2026-09-05 時点の引き継ぎ）
+## 15. 次にやること（2026-09-06 時点の引き継ぎ）
+
+前回の引き継ぎから済んだこと:
+- **公開**: private → public。branch protection（force push 禁止、linear history、PR 必須、CI 必須、admin にも適用）、secret scanning + push protection、Dependabot alerts / security updates。
+- **リリース配管**: Secrets を入れ、`v0.1.0`（zip）→ `v0.1.1`（dmg）を署名・公証込みで通した。詳細と落とし穴は `docs/distribution.md`。
+- **アプリ内の導線**: Help › Report an Issue…（環境情報を埋めた Issue フォーム）、Help › Reveal Sync Log in Finder、Sill › Check for Updates…。iPhone は Sync シート下部に Report an Issue。
+- **プロトコル不一致の扱い**: `SyncError: LocalizedError` でどちら側が古いかを言い、電話は再接続ループを止める。サーバーは切る前に `bye("protocol-version:<n>")` を送る（凍結された wire surface）。
 
 決定待ち（オーナー）:
-- **公開の切り替え**（private → public）。public にしたら branch protection を API で入れる（force push 禁止、linear history、admin にも適用）。
-- **Release の Secrets**（Developer ID 証明書 p12、App Store Connect API キー、Team ID）。入れたら `v0.1.0` タグで初回リリースを試し、公証まで通す。
 - **LICENSE の名義**（現状 MIT / mrskiro）。
 - **README の言語**（現状日本語。英語版にするか）。
 
 実装:
+- **iOS の App Store 提出準備**: `PrivacyInfo.xcprivacy`（無いとアップロードが弾かれる）、privacy policy / support URL（LP に置く）、スクリーンショット、年齢レーティング、non-trader 申告。審査ノートに「Mac が無くても iPhone 単体でメモとして完結する」と明記する（審査員は Mac を持っていないので、ペアリング必須に見えると minimum functionality で落ちる）。`release.yml` に iOS レーンを足す。
+- **LP + GitHub Pages**。`site/` に置く（`docs/` から配信すると `docs/design.md` が公開ページになる）。
+- **自分の tap + cask**。homebrew-cask 本体は自己申請だと 225 stars / 90 forks / 90 watchers が要るので、まず `mrskiro/homebrew-tap`。リリース時に cask の version / sha256 を更新するなら tap に書ける PAT が要る。
+- **ASC キーを公証専用（Developer ロール）に落とす**。archive も手動署名にすれば cloud signing が不要になる。`PROVISIONING_PROFILE_SPECIFIER` はコマンドラインで渡せないので `project.yml` の Release 設定に入れる（`docs/distribution.md` の落とし穴を参照）。
+- **export（.md 書き出し）**。SQLite は App Sandbox のコンテナ内にあり、ユーザーは Finder でも実質手が届かない。壊れたときに人力で救う手段が今は無い。
 - **iOS の書式ツールバー**（最後に回す指示あり）: 純正メモのようにキーボード上部に「箇条書き / 番号付き / チェックボックス / 太字 / 斜体 / コード / 見出し / インデント」を並べ、Markdown 記法を挿入・トグルする。本文は Markdown 文字列のまま。`MarkdownEditing` に純関数として追加し、Mac のメニューからも同じ関数を呼ぶ。
 - iOS の実機で `PhoneSync` の再接続ループとローカルネットワーク許可の挙動を長時間（数日）観察する。Scenario E の実運用確認。
 - Sync 状態の UI（Mac ヘッダー / iOS 下部バー）の文言と更新頻度の見直し。
@@ -385,3 +394,6 @@ sill/
 | 7 | merge モデル | A: ノート単位 LWW + version vector + 複製ノート。diff3 は必要になったら v2 |
 | 8 | 保存形式 | SQLite（GRDB）。export / MCP は後から |
 | 9 | 同期の起点 | iPhone が接続を維持し、Mac は `poke` で round を起こす |
+| 10 | Mac の配布 | Developer ID 直配布の dmg（+ 将来 brew tap）。Mac App Store は採らない。詳細は `docs/distribution.md` |
+| 11 | 自動更新 | 持たない。Check for Updates が押されたときだけ `releases/latest` を1回見る |
+| 12 | プロトコル不一致 | `bye("protocol-version:<n>")` で相手に伝える（v1 で凍結）。受けた側は再接続を諦める |
