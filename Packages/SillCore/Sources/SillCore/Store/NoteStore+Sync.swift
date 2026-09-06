@@ -7,6 +7,13 @@ public struct ApplyResult: Equatable, Sendable {
     public var kept = 0
     public var conflicts = 0
     public var conflictCopies = 0
+
+    /// Whether this round left anything for the other peers to hear about. `conflicts` counts in:
+    /// resolving one rewrites the local row unless our own version already won, and even then the
+    /// sender is behind. Over-counting costs one empty round; under-counting stalls a relay.
+    public var changedAnything: Bool {
+        inserted + overwritten + conflicts + conflictCopies > 0
+    }
 }
 
 extension NoteStore {

@@ -68,7 +68,7 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         LSApplicationCategoryType: public.app-category.productivity
-        NSLocalNetworkUsageDescription: Sill syncs your notes directly with your paired iPhone over the local network.
+        NSLocalNetworkUsageDescription: Sill syncs your notes directly with your paired devices over the local network.
         NSBonjourServices:
           - _sill._tcp
         NSHumanReadableCopyright: ""

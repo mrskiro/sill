@@ -35,7 +35,7 @@ Deployment target は macOS 26 / iOS 26。新 Network API が要るのでこれ�
 ```
 ┌──────────────── macOS app (SillMac) ───────────────┐   ┌──────────── iOS app (SillPhone) ───────────┐
 │ Dock app + hotkey + NSPanel(floating) + QR 表示     │   │ NavigationStack + UITextView + QR scan      │
-│ role: listener (server)                            │   │ role: browser + connect (client)            │
+│ role: listener + dialer（Mac 同士は id で決める）   │   │ role: browser + connect (client)            │
 └───────────────┬────────────────────────────────────┘   └───────────────┬────────────────────────────┘
                 │ depends on                                              │ depends on
 ┌───────────────▼──────────────────────────────────────────────────────────▼────────────────────────────┐
@@ -150,8 +150,10 @@ CREATE TABLE peer (                     -- 信頼済み端末
 
 ## 7. Transport（Network.framework 新 API）
 
-- 役割固定: **Mac = `NetworkListener`（server）、iPhone = `NetworkBrowser` + `NetworkConnection`（client）**。client-server 構成で重複接続の dedup が不要（TN3213 推奨）。
-- Mac は起動中ずっと `.bonjour(type: "_sill._tcp", txtRecord: [fp: 証明書 fingerprint 先頭 8 byte])` を advertise。サービス名は端末名ではなくランダム（TN3213 の privacy 指針）。
+- 役割: **Mac = `NetworkListener`（server）+ 必要なら `NetworkBrowser` / `NetworkConnection`（client）、iPhone = client のみ**。iPhone は advertise しないので、Mac ↔ iPhone は従来どおり client-server で dedup が要らない。
+- **Mac 同士**は両方が listener でもあり client でもあるので、放っておくと互いに 1 本ずつ張って round が二重に走る。`SyncRole`（`Sync/SyncRole.swift`）で **device id（UUID 文字列）の小さい方が dial する**と決める。状態を持たず、両端が同じ答えに着くので折衝が要らない。ペアリングだけはこの規則を無視して、コードを貼った側が 1 回 dial する（その後 round を 1 巡してから、規則が指す側に dial を譲る）。
+- 3 台以上の Mac では「自分より大きい id のうち最初に見つけた 1 台」に繋ぐだけなので、接続グラフは連結とは限らない（2 台 + iPhone は常に連結）。台数が増えたら peer ごとに dial タスクを持つ形にする。
+- Mac は起動中ずっと `.bonjour(type: "_sill._tcp", txtRecord: [fp: 証明書 fingerprint 先頭 8 byte])` を advertise。サービス名は端末名ではなくランダム（TN3213 の privacy 指針）。dial する側の Mac は同じ TXT を見て相手を選ぶ（`MacDialer`）。
 - iPhone は foreground かつ未接続の間 browse を続け、TXT の `fp` が信頼済み Mac に一致する endpoint が現れたら **browse を止めてから** connect。Mac を後から起動しても iPhone 側が見つける。
 - 接続は iPhone が foreground の間維持。background で切れたら foreground 復帰時に再接続（指数バックオフ）。
 - **Mac 起点の同期**: 接続中、Mac に新しい変更が出るたび（autosave 後 1 秒デバウンス）`poke` を送り、iPhone に round（9 節）を始めさせる。「Sync now」も同じ `poke`。iOS の制約上、Mac 発の同期が成立しうるのは iPhone 側アプリが前面の時だけで、その時は必ず接続が開いている。
@@ -188,8 +190,8 @@ CREATE TABLE peer (                     -- 信頼済み端末
 
 **ペアリング（QR は片方向、1 回）**
 
-1. Mac の Settings → Pair iPhone: one-time `token`（128 bit、2 分有効）を作り、`{v:1, deviceId, name, fingerprint, token}` を QR 表示（CoreImage）。Mac は「ペアリングモード」に入る
-2. iPhone が VisionKit `DataScannerViewController` で読み取り、Mac を `peer` に保存（fingerprint pinning）
+1. Mac の Settings → Pair a Device: one-time `token`（128 bit、2 分有効）を作り、`{v:1, deviceId, name, fingerprint, token}` を QR 表示（CoreImage）。Mac は「ペアリングモード」に入る
+2. iPhone が VisionKit `DataScannerViewController` で読み取り、Mac を `peer` に保存（fingerprint pinning）。**Mac 同士**はカメラを使わず、同じ文字列（`sill:` + base64）を「Copy Code」→ もう一方の Settings のフィールドに貼る。中身も検証も QR と同一
 3. iPhone が接続。iPhone 側 validator は Mac の fingerprint を検証。Mac 側 validator はペアリングモード中のみ未知の証明書を通し、その fingerprint を接続に紐づけて覚える
 4. iPhone → `pair{token, deviceId, name}`。Mac は token を検証し、接続の fingerprint を `peer` に保存 → `paired{deviceId, name}`。token は使い捨て、ペアリングモード終了
 5. 以後は通常の `hello`（9 節）。解除 = 両側で `peer` 行を削除
@@ -222,6 +224,8 @@ client: 1 トランザクションで適用 + seen = max(seen, serverVector)
 ```
 
 round のトリガー: 接続直後 / client の autosave 後 1 秒 / server からの `poke`。round 中のトリガーは終了後にもう 1 round。
+
+**中継**: Mac A が iPhone を serve しつつ Mac B を dial している構成では、片方の接続で入った変更をもう片方へ押し出す必要がある。`synced` イベントに `changed`（その round で実際に適用があったか = `ApplyResult.changedAnything`）を載せ、true のときだけ反対側に `poke` / `localChanged` を出す（`MacSync.handle`）。空の round で poke し合うと無限に往復するので、この条件が要る。`conflicts` も数に入れる: 競合解決は複製を作らなくてもローカル行を書き換えることがあり（tombstone に live が勝つ等）、落とすと中継がそこで止まる。多めに数えて余分な空 round が 1 回走る方が安全。
 
 順序の意味: client の変更が **先に適用される**ので、server が返す `serverVector` は client の全 version を含む。client 側では server の行が「自分の行の子孫」と判定され、通常は server だけが競合を解決する。
 
@@ -349,6 +353,7 @@ sill/
 | 8 | Sync engine（純関数）+ 収束テスト（3 端末シミュレーション、ランダム操作） | 生存集合一致・文章消失なしが緑 | 済（16 seed × 400 操作） |
 | 9 | Transport と engine を結合、QR ペアリング | Scenario D / E を実機で通す | 済。`make device-check DEVICE=<id>` で実機の双方向同期を自動検証 |
 | 10 | pin、同期状態表示、hotkey recorder、unpair | 仕上げ | 済（pin は ⌘⇧P、hotkey は Settings で変更） |
+| 11 | Mac ↔ Mac 同期（`MacDialer` + `SyncRole` + コード貼り付けペアリング） | 2 台の Mac が 1 本の接続で双方向に同期し、片方に繋いだ iPhone にも中継で届く | 済（`Tests/Mac/MacToMacSyncTests.swift` で id の順序を両方通す。実機確認は 15 節） |
 
 テスト方針: SillCore は `swift test`（同期セッションはメモリ内チャネルで、識別は swift-certificates の証明書で検証）。実機は `scripts/device-sync-check.sh`: Mac を `SILL_DEBUG=1` で起動して `sill://debug/...` で操作し、iPhone は `devicectl` の環境変数でノートを作らせ、両 DB（iPhone 側は `devicectl device copy from` で取得）で到達を確認する。両アプリは `Application Support/Sill/sync.log` に同期の経過を残す。ホスト型テストでは 127.0.0.1 上で本物の相互 TLS（pinning）を張り、アプリの listener / client と結合した端末間フローまで通す。Mac の UI 挙動は Sill.app 内で動くホスト型テスト（`Tests/Mac`）で、NSTextView に実際のキーイベントを流して検証する。iOS も同様に simulator 上の Sill.app 内で動くホスト型テスト（`Tests/iOS`）で、UITextView の `insertText` 経路（実キーボードと同じ）を通す。`SILL_TEST_MODE=1` で使い捨て DB を使い、Mac ではパネルが key にならず accessory ポリシーで起動する（他アプリへの入力を奪わない）。XcodeGen の sources は `syncedFolder` にしてあり、ファイル追加で再生成は不要。
 
@@ -364,10 +369,13 @@ sill/
 - **iOS の書式ツールバー**（最後に回す指示あり）: 純正メモのようにキーボード上部に「箇条書き / 番号付き / チェックボックス / 太字 / 斜体 / コード / 見出し / インデント」を並べ、Markdown 記法を挿入・トグルする。本文は Markdown 文字列のまま。`MarkdownEditing` に純関数として追加し、Mac のメニューからも同じ関数を呼ぶ。
 - iOS の実機で `PhoneSync` の再接続ループとローカルネットワーク許可の挙動を長時間（数日）観察する。Scenario E の実運用確認。
 - Sync 状態の UI（Mac ヘッダー / iOS 下部バー）の文言と更新頻度の見直し。
+- `PhoneSync` と `MacDialer` の dial ループ（browse → connect → バックオフ）はほぼ同じ。3 つ目が要るときに `SillCore` へ寄せる。今は片方が foreground 依存、もう片方が `SyncRole` 依存で、共通化しても得が小さい。
+- 2 台の Mac での実運用確認: 実機同士で Bonjour 発見、初回の Local Network 許可（Mac が browse するのは今回が初めて）、スリープ復帰後の再接続。
+- `peer` に端末種別を持たせる。今は種別が分からないので、iPhone の id が自分より大きい Mac は「絶対に現れないサービス」を browse し続ける（実害は無いが無駄で、Local Network 許可も要らないところで出る）。`hello` にフィールドを足す = protocolVersion 更新なので、次の版で。
 
 ## 16. 将来の拡張方向（設計上の制約として意識するもの。MVP では作らない）
 
-- **端末追加（iPad、2 台目の Mac）**: `peer` 行を増やすだけ。version vector なので Mac をハブに推移的に届く。iPhone ↔ iPad 直結は両方 foreground が要り、対称ロールと dedup が必要になるので後回し。
+- **端末追加（iPad）**: `peer` 行を増やすだけ。version vector なので Mac をハブに推移的に届く。iPhone ↔ iPad 直結は両方 foreground が要り、対称ロールと dedup が必要になるので後回し（2 台目の Mac は 7 節の `SyncRole` で実装済み）。
 - **離れた場所での同期（relay）**: 同じ round プロトコルを HTTPS 上で喋る「受動的な peer」（例: Cloudflare Durable Object）。ペアリング QR に vault 鍵を 1 つ足せば relay は暗号化された行とベクトルしか持たない E2E 構成にできる。アカウントは不要のまま。
 - **安全な自動 merge**: 各ノートに「最後に同期した content」を持てば diff3 で非重複編集を自動 merge できる。今の行構造に列を 1 つ足すだけ。
 - **MCP**: `list_notes / read_note / search_notes` は SQLite 読み取りで足りる。
@@ -385,3 +393,4 @@ sill/
 | 7 | merge モデル | A: ノート単位 LWW + version vector + 複製ノート。diff3 は必要になったら v2 |
 | 8 | 保存形式 | SQLite（GRDB）。export / MCP は後から |
 | 9 | 同期の起点 | iPhone が接続を維持し、Mac は `poke` で round を起こす |
+| 10 | Mac 同士 | 両方が listener 兼 client。device id の小さい方が dial する（`SyncRole`）。ペアリングはコードを貼る側が 1 回だけ dial |

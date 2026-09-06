@@ -149,7 +149,7 @@ final class PhoneSync {
         case .connected(let peer):
             status = .connected(peer.name)
             refreshPeers()
-        case .synced(let peer):
+        case .synced(let peer, _):
             lastSyncAt = peer.lastSyncAt
         case .ended:
             if case .connected = status { status = .searching }
