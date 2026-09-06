@@ -42,6 +42,15 @@ targets:
         # lives in the data-protection keychain, which needs an application-identifier entitlement.
         CODE_SIGN_STYLE: Automatic
         ENABLE_HARDENED_RUNTIME: YES
+      configs:
+        # Release is the distribution build. Manual, because Xcode's cloud signing refuses to
+        # issue the Developer ID profile this app needs, and per-target, because passing
+        # PROVISIONING_PROFILE_SPECIFIER on the xcodebuild command line would hand it to the
+        # SwiftPM dependencies too, which reject it.
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Developer ID Application
+          PROVISIONING_PROFILE_SPECIFIER: Sill Developer ID
     entitlements:
       path: Apps/Mac/Sill.entitlements
       properties:
