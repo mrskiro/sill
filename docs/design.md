@@ -127,7 +127,17 @@ CREATE TABLE peer (                     -- 信頼済み端末
   - Return: `- ` `* ` `1. ` `- [ ] ` を継続。空の項目で Return → マーカーを消す
   - Tab / Shift+Tab: リスト項目のインデント / アウトデント
   - ⌘Return: 現在行の `[ ]` ↔ `[x]` トグル（Raycast Notes と同じキー）
-- シンタックスハイライトは MVP に入れない。
+- 書式コマンド（見出し / 太字 / 斜体 / コード / 箇条書き / 番号付き / チェックボックス / インデント）も同じ `MarkdownEditing` の純関数。挿入するのは Markdown 記法そのもので、本文は文字列のまま。
+  - 並びは「ブロック様式 → インライン → リスト + インデント」。純正メモの Aa パネル、TinyMCE 系、GitHub の markdown-toolbar-element に共通する慣習に合わせた（箇条書き → 番号付き → チェックの順、outdent/indent はリストの直後、Bold が Italic より先）。
+  - iOS: `inputAccessoryView` にキーボード上部のツールバー（純正メモと同じ位置）。グループ間はセパレータで区切る。横スクロールするので狭い端末でもボタンが欠けない。IME の変換中はタップを無視する。
+  - macOS: Format メニューから同じ関数を同じ順で呼ぶ（⌘B / ⌘I / ⇧⌘7 / ⇧⌘9 / ⌘Return）。パネルが非表示のときは効かない。
+  - 見出し / 箇条書き / 番号付きは、選択がまたぐ**全行**に効く。全行が既にその印を持っていれば外し、そうでなければ揃える（空行は対象外）。番号付きは直前の同じインデントの項目から続けて採番する（プレーンテキストなので後から振り直す描画側がいない）。
+  - 斜体はアスタリスクの連続数の偶奇で判定する。奇数なら斜体のペアがあるので 1 対外し、偶数なら太字だけなので入れ子にする。`**bold**` の内側を選んで斜体を押しても太字が壊れない。
+- 表示は「記法を残したまま強調する」。MVP では入れなかったが、raw のままだと読み返しづらいので MVP 後に足した。
+  - 対象は書式ツールバーが作れるものだけ: ATX 見出し、リストマーカー（`ListLine` が解釈するもの）、`**bold**` / `*italic*` / `` `code` ``。見出し行の中はインライン走査しない（フォントの取り合いになる）。
+  - `#` や `**` は消さずに `.tertiaryLabel` で沈める。記法を隠す live preview 型は採らない（カーソル行が変わるたびに本文が組み直され、Text preservation の見た目上の保証も崩れる）。
+  - 実装は TextKit 2 の `NSTextContentStorageDelegate.textContentStorage(_:textParagraphWith:)`。レイアウトが段落を要求したときに装飾済みのコピーを返すだけで、**バックストアには一切属性を書かない**。入力経路に処理が乗らず、undo にも積まれず、保存されるのは打った文字列そのもの。
+  - 判定は `SillCore/Editing/MarkdownHighlighting.swift` の純関数（段落 → 重ならない span 列）。フォントと色は各 OS 側。
 - フォント: システムフォント 14pt。
 
 ## 5. macOS: Dock アプリ + hotkey + Floating Window
@@ -368,7 +378,6 @@ sill/
 - **README の言語**（現状日本語。英語版にするか）。
 
 実装:
-- **iOS の書式ツールバー**（最後に回す指示あり）: 純正メモのようにキーボード上部に「箇条書き / 番号付き / チェックボックス / 太字 / 斜体 / コード / 見出し / インデント」を並べ、Markdown 記法を挿入・トグルする。本文は Markdown 文字列のまま。`MarkdownEditing` に純関数として追加し、Mac のメニューからも同じ関数を呼ぶ。
 - iOS の実機で `PhoneSync` の再接続ループとローカルネットワーク許可の挙動を長時間（数日）観察する。Scenario E の実運用確認。
 - Sync 状態の UI（Mac ヘッダー / iOS 下部バー）の文言と更新頻度の見直し。
 - `PhoneSync` と `MacDialer` の dial ループ（browse → connect → バックオフ）はほぼ同じ。3 つ目が要るときに `SillCore` へ寄せる。今は片方が foreground 依存、もう片方が `SyncRole` 依存で、共通化しても得が小さい。
@@ -396,3 +405,4 @@ sill/
 | 9 | 同期の起点 | iPhone が接続を維持し、Mac は `poke` で round を起こす |
 | 10 | Mac 同士 | 両方が listener 兼 client。device id の小さい方が dial する（`SyncRole`）。ペアリングはコードを貼る側が 1 回だけ dial |
 | 11 | 端末種別 | `hello` のオプショナル `kind`（mac / ios）で交換し `peer.kind` に保存。iOS は dial しない。プラットフォーム名にしたのは iPad でケースを増やさないため。未知の値は `.unknown` に落として読む（ケースを足しても旧版のデコードを壊さない）。オプショナルなので protocolVersion は据え置き |
+| 12 | Markdown の表示 | 記法を残したまま強調する。装飾は TextKit 2 の content storage delegate で描画時にだけ載せ、バックストアはプレーンのまま。記法を隠す live preview は採らない |

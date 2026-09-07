@@ -149,6 +149,57 @@ struct CaptureFlowTests {
         #expect(try textView().undoManager?.canUndo == true)
     }
 
+    @Test func formatMenuRunsTheSameMarkdownCommands() throws {
+        app.newNote()
+        try type("todo")
+        app.format(MarkdownEditing.toggleBullet)
+        #expect(try textView().string == "- todo")
+        #expect(app.model.text == "- todo")  // the delegate fired, so autosave will pick it up
+
+        try textView().setSelectedRange(NSRange(location: 2, length: 4))
+        app.format { MarkdownEditing.toggleInline(.bold, in: $0, selection: $1) }
+        #expect(try textView().string == "- **todo**")
+        #expect(try textView().selectedRange() == NSRange(location: 4, length: 4))
+        #expect(try textView().undoManager?.canUndo == true)
+        try pressEscape()
+    }
+
+    /// Markdown is styled by the TextKit 2 render pass, never by writing attributes into the
+    /// document. The stored note has to stay the exact plain string that was typed.
+    @Test func highlightingStylesTheRenderPassAndLeavesTheTextPlain() throws {
+        app.newNote()
+        try type("# head\n**bold**")
+        #expect(try textView().string == "# head\n**bold**")
+
+        let stored = try textView().attributedString()
+        var fonts = Set<NSFont>()
+        stored.enumerateAttribute(.font, in: NSRange(location: 0, length: stored.length)) { value, _, _ in
+            if let font = value as? NSFont { fonts.insert(font) }
+        }
+        #expect(fonts == [MarkdownHighlighter.base])
+
+        let storage = try #require(textView().textLayoutManager?.textContentManager as? NSTextContentStorage)
+        let rendersThroughOurDelegate = storage.delegate as AnyObject? === MarkdownHighlighter.shared
+        #expect(rendersThroughOurDelegate)
+        // What the layout actually gets, straight from the content manager: the heading paragraph
+        // comes back bold with its "# " dimmed, while the document itself stays plain.
+        let elements = storage.textElements(for: storage.documentRange)
+        let first = try #require((elements.first as? NSTextParagraph)?.attributedString)
+        #expect(first.string == "# head\n")
+        #expect((first.attribute(.font, at: 2, effectiveRange: nil) as? NSFont) == MarkdownHighlighter.headingFont)
+        #expect(first.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor == .tertiaryLabelColor)
+        try pressEscape()
+    }
+
+    /// SwiftUI adds a Format menu of its own to text-editing apps; Sill must end up with one.
+    @Test func theMenuBarHasExactlyOneFormatMenu() throws {
+        let menus = try #require(NSApp.mainMenu?.items.filter { $0.title == "Format" })
+        #expect(menus.count == 1)
+        let titles = menus.first?.submenu?.items.map(\.title) ?? []
+        #expect(titles.contains("Bulleted List"))
+        #expect(titles.contains("Bold"))
+    }
+
     @Test func sidebarListsNotesSwitchesAndDeletes() async throws {
         app.newNote()
         try type("first note")

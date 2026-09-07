@@ -161,6 +161,80 @@ struct PhoneFlowTests {
         #expect(try model.store.note(id: note.id)?.isDeleted == true)
     }
 
+    /// Taps the keyboard toolbar the way a finger does: the button's own action, on the real view.
+    private func tapFormat(_ label: String, in textView: UITextView) throws {
+        let toolbar = try #require(textView.inputAccessoryView)
+        let identifier = FormatToolbar.identifier(for: label)
+        let button = try #require(
+            toolbar.allDescendants(of: UIButton.self).first { $0.accessibilityIdentifier == identifier })
+        button.sendActions(for: .touchUpInside)
+    }
+
+    @Test func formatToolbarEditsTheMarkdownAndAutosaves() async throws {
+        let (draft, textView) = try await openNewEditor()
+        let toolbar = try #require(textView.inputAccessoryView)
+        #expect(toolbar.allDescendants(of: UIButton.self).count == FormatToolbar.commands.count)
+
+        textView.insertText("todo")
+        try tapFormat("Bulleted List", in: textView)
+        #expect(textView.text == "- todo")
+        #expect(textView.selectedRange == NSRange(location: 6, length: 0))
+
+        try tapFormat("Checklist", in: textView)
+        #expect(textView.text == "- [ ] todo")
+
+        textView.selectedRange = NSRange(location: 6, length: 4)
+        try tapFormat("Bold", in: textView)
+        #expect(textView.text == "- [ ] **todo**")
+        #expect(textView.selectedRange == NSRange(location: 8, length: 4))
+
+        // A selection spanning lines marks up every one of them.
+        textView.selectedRange = NSRange(location: (textView.text as NSString).length, length: 0)
+        textView.insertText("\nsecond\nthird")
+        let all = NSRange(location: 0, length: (textView.text as NSString).length)
+        textView.selectedRange = all
+        try tapFormat("Numbered List", in: textView)
+        #expect(textView.text == "1. [ ] **todo**\n2. second\n3. third")
+        try tapFormat("Numbered List", in: textView)  // every line numbered → strip them all
+        #expect(textView.text == "**todo**\nsecond\nthird")
+
+        // The delegate ran, so the draft saw every edit and autosave picked them up.
+        #expect(draft.text == "**todo**\nsecond\nthird")
+        let saved = "**todo**\nsecond\nthird"
+        try await waitUntil { (try? self.model.store.note(id: draft.note?.id ?? UUID())?.content) == saved }
+        model.path = []
+    }
+
+    /// Markdown is styled by the TextKit 2 render pass, never by writing attributes into the
+    /// document. The stored note has to stay the exact plain string that was typed.
+    @Test func highlightingStylesTheRenderPassAndLeavesTheTextPlain() async throws {
+        let (draft, plain) = try await openNewEditor()
+        let textView = try #require(plain as? MarkdownUITextView)
+        let storage = try #require(textView.textLayoutManager?.textContentManager as? NSTextContentStorage)
+        let rendersThroughOurDelegate = storage.delegate as AnyObject? === MarkdownHighlighter.shared
+        #expect(rendersThroughOurDelegate)
+
+        textView.insertText("# head\n**bold**")
+        #expect(textView.text == "# head\n**bold**")
+        #expect(draft.text == "# head\n**bold**")
+
+        var fonts = Set<UIFont>()
+        let whole = NSRange(location: 0, length: (textView.text as NSString).length)
+        textView.attributedText.enumerateAttribute(.font, in: whole) { value, _, _ in
+            if let font = value as? UIFont { fonts.insert(font) }
+        }
+        #expect(fonts == [MarkdownHighlighter.base])
+
+        // What the layout actually gets, straight from the content manager: the heading paragraph
+        // comes back bold with its "# " dimmed, while the document itself stays plain.
+        let elements = storage.textElements(for: storage.documentRange)
+        let first = try #require((elements.first as? NSTextParagraph)?.attributedString)
+        #expect(first.string == "# head\n")
+        #expect((first.attribute(.font, at: 2, effectiveRange: nil) as? UIFont) == MarkdownHighlighter.headingFont)
+        #expect(first.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor == .tertiaryLabel)
+        model.path = []
+    }
+
     @Test func editorNeverRewritesWhatWasTyped() async throws {
         let (_, textView) = try await openNewEditor()
         #expect(textView.smartQuotesType == .no)

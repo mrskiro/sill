@@ -54,6 +54,50 @@ struct EditorTextView: NSViewRepresentable {
     }
 }
 
+/// Renders Markdown without rewriting it. TextKit 2 asks for each paragraph as it lays it out,
+/// and we hand back a styled copy; the backing storage — and so the note that gets saved — stays
+/// the plain string the user typed. Nothing runs on the typing path, and there is nothing to
+/// undo, because no attribute is ever written into the document.
+final class MarkdownHighlighter: NSObject, NSTextContentStorageDelegate {
+    // NSFont is not marked Sendable, but a font instance is immutable once created and the
+    // delegate is only ever called while text is laid out. The protocol is not main-actor
+    // isolated, so the fonts cannot be either.
+    /// One shared instance: the delegate property is weak, and a text view created through an
+    /// AppKit/UIKit initializer is not a safe place to hang the strong reference.
+    nonisolated(unsafe) static let shared = MarkdownHighlighter()
+
+    nonisolated(unsafe) static let base = NSFont.systemFont(ofSize: 14)
+    nonisolated(unsafe) static let headingFont = NSFont.boldSystemFont(ofSize: 17)
+    nonisolated(unsafe) private static let bold = NSFont.boldSystemFont(ofSize: 14)
+    nonisolated(unsafe) private static let italic = NSFontManager.shared.convert(
+        base, toHaveTrait: .italicFontMask)
+    nonisolated(unsafe) private static let code = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+
+    func textContentStorage(
+        _ textContentStorage: NSTextContentStorage, textParagraphWith range: NSRange
+    ) -> NSTextParagraph? {
+        // AppKit backs the content storage with an NSTextStorage; UIKit uses `attributedString`.
+        // Reading only one of them silently yields nil, and the text renders unstyled.
+        let backing = textContentStorage.textStorage ?? textContentStorage.attributedString
+        guard let original = backing?.attributedSubstring(from: range) else { return nil }
+        let spans = MarkdownHighlighting.spans(in: original.string)
+        guard !spans.isEmpty else { return nil }
+        // Copy and add: the incoming attributes carry the input method's marked-text underline.
+        let styled = NSMutableAttributedString(attributedString: original)
+        for span in spans {
+            switch span.style {
+            case .heading: styled.addAttribute(.font, value: Self.headingFont, range: span.range)
+            case .bold: styled.addAttribute(.font, value: Self.bold, range: span.range)
+            case .italic: styled.addAttribute(.font, value: Self.italic, range: span.range)
+            case .code: styled.addAttribute(.font, value: Self.code, range: span.range)
+            case .marker:
+                styled.addAttribute(.foregroundColor, value: NSColor.tertiaryLabelColor, range: span.range)
+            }
+        }
+        return NSTextParagraph(attributedString: styled)
+    }
+}
+
 final class MarkdownTextView: NSTextView {
     var onEscape: (() -> Void)?
 
@@ -64,7 +108,9 @@ final class MarkdownTextView: NSTextView {
         contentStorage.addTextLayoutManager(layoutManager)
         let container = NSTextContainer(size: NSSize(width: 0, height: CGFloat.greatestFiniteMagnitude))
         layoutManager.textContainer = container
-        return MarkdownTextView(frame: .zero, textContainer: container)
+        let textView = MarkdownTextView(frame: .zero, textContainer: container)
+        contentStorage.delegate = MarkdownHighlighter.shared
+        return textView
     }
 
     override init(frame frameRect: NSRect, textContainer container: NSTextContainer?) {
@@ -80,7 +126,7 @@ final class MarkdownTextView: NSTextView {
     private func configure() {
         isRichText = false
         allowsUndo = true
-        font = .systemFont(ofSize: 14)
+        font = MarkdownHighlighter.base
         textContainerInset = NSSize(width: 12, height: 12)
         drawsBackground = false
         usesFontPanel = false
@@ -137,7 +183,11 @@ final class MarkdownTextView: NSTextView {
     }
 
     /// Applies an edit through the undo-aware change path, as its own undo step.
-    private func apply(_ edit: TextEdit) {
+    /// The key overrides above are reached only after the input method has committed, but a menu
+    /// key equivalent is dispatched before the responder chain — so ⌘B pressed mid-conversion
+    /// would otherwise rewrite the text under the marked range.
+    func apply(_ edit: TextEdit) {
+        guard !hasMarkedText() else { return }
         breakUndoCoalescing()
         guard shouldChangeText(in: edit.range, replacementString: edit.replacement) else { return }
         textStorage?.replaceCharacters(in: edit.range, with: edit.replacement)
