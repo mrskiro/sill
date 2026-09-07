@@ -157,6 +157,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.copyAsMarkdown()
     }
 
+    func format(_ command: (String, NSRange) -> TextEdit?) {
+        model.format(command)
+    }
+
     func toggleSidebar() {
         showPanel()
         model.toggleSidebar()

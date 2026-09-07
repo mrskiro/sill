@@ -117,6 +117,18 @@ final class EditorModel {
         textView.window?.makeFirstResponder(textView)
     }
 
+    /// Format menu: runs one `MarkdownEditing` command on the editor, sharing the code path
+    /// (and the undo grouping) with the keys the text view handles itself. Menu shortcuts fire
+    /// application-wide, so this only acts when the editor is the thing being typed into — not
+    /// when focus is in the sidebar, the Settings window, or the panel is hidden.
+    func format(_ command: (String, NSRange) -> TextEdit?) {
+        guard let textView = textView as? MarkdownTextView, textView.window?.isVisible == true,
+            textView.window?.firstResponder === textView,
+            let edit = command(textView.string, textView.selectedRange())
+        else { return }
+        textView.apply(edit)  // didChangeText() inside notifies the delegate, which autosaves
+    }
+
     func copyAsMarkdown() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
