@@ -269,9 +269,7 @@ print("macOS:")
 var macImages: [[String: Any]] = []
 for points in [16, 32, 128, 256, 512] {
   for scale in [1, 2] {
-    // Underscore rather than Apple's usual at-sign before the scale suffix.
-    // Contents.json carries the real scale either way, so the name is free.
-    let name = "icon_\(points)x\(points)\(scale == 1 ? "" : "_2x").png"
+    let name = "icon_\(points)x\(points)\(scale == 1 ? "" : "@2x").png"
     write(render(.light, .macOS, pixels: points * scale), to: macSet.appendingPathComponent(name))
     macImages.append([
       "filename": name, "idiom": "mac", "scale": "\(scale)x", "size": "\(points)x\(points)",
