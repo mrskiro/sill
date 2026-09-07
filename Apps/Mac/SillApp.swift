@@ -17,6 +17,10 @@ struct SillApp: App {
             CommandGroup(replacing: .newItem) {
                 Button("New Note") { appDelegate.newNote() }
                     .keyboardShortcut("n", modifiers: [.command])
+                Divider()
+                // In the group the File menu already has, rather than anchored to `.saveItem`,
+                // which this app never populates.
+                Button("Export Notes…") { appDelegate.exportNotes() }
             }
             CommandGroup(after: .pasteboard) {
                 Button("Copy as Markdown") { appDelegate.copyAsMarkdown() }

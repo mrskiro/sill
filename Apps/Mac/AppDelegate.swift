@@ -157,6 +157,52 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.copyAsMarkdown()
     }
 
+    /// File ▸ Export Notes…: pick where it goes, and a `Sill Notes` folder appears there holding
+    /// one `.md` file per note.
+    ///
+    /// A folder chooser rather than a save panel: typing a name that already exists into a save
+    /// panel makes it navigate into that folder instead of returning it, and the Replace it offers
+    /// covers the folder, never the files inside one.
+    ///
+    /// The app's own window is non-activating, so without activating first the modal can open
+    /// behind whatever the user was working in.
+    func exportNotes() {
+        NSApp.activate()
+        let openPanel = NSOpenPanel()
+        openPanel.message = "Choose where to put a folder of Markdown files, one per note."
+        openPanel.prompt = "Export"
+        openPanel.canChooseDirectories = true
+        openPanel.canChooseFiles = false
+        openPanel.allowsMultipleSelection = false
+        openPanel.canCreateDirectories = true
+        guard openPanel.runModal() == .OK, let parent = openPanel.url else { return }
+        do {
+            NSWorkspace.shared.activateFileViewerSelecting([try exportNotes(into: parent)])
+        } catch {
+            NSAlert(error: error).runModal()
+        }
+    }
+
+    /// Writes into a folder that did not exist a moment ago, so nothing of the user's is ever
+    /// overwritten, and a run that fails part way leaves nothing behind rather than a folder holding
+    /// some of the notes. The note being typed into is saved first, so what is on screen is in it.
+    @discardableResult
+    func exportNotes(into parent: URL) throws -> URL {
+        model.flush()
+        let directory = MarkdownExport.availableDirectory(in: parent, named: "Sill Notes")
+        // Create it here, and refuse to create it over anything: only then is the folder provably
+        // ours, which is what earns the right to delete it again below. Asking for intermediate
+        // directories would quietly accept an entry that is already sitting at that path.
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        do {
+            try MarkdownExport.write(store.liveNotes(), to: directory)
+        } catch {
+            try? FileManager.default.removeItem(at: directory)
+            throw error
+        }
+        return directory
+    }
+
     func format(_ command: (String, NSRange) -> TextEdit?) {
         model.format(command)
     }
