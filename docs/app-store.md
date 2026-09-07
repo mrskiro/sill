@@ -28,7 +28,8 @@ under pressure. The Mac app stays on Developer ID (`docs/distribution.md`); this
 The copy lives in `metadata/` in the layout `asc` (App Store Connect CLI) reads, so it is applied
 rather than pasted: `metadata/app-info/en-US.json` holds the name, subtitle and privacy policy URL;
 `metadata/version/<version>/en-US.json` holds the description, keywords, promotional text, support and
-marketing URLs, and What's New. The version directory has to match the App Store version being
+marketing URLs. Add `whatsNew` from the second version on; Apple rejects it on the first, and one rejected
+field fails the whole localization update. The version directory has to match the App Store version being
 prepared (rename it when the first store version is not 0.2.0).
 
 ```sh
@@ -85,11 +86,13 @@ or it is rejected with "No suitable application records were found".
 
 - [x] App record created in App Store Connect (browser; the public API cannot create apps)
 - [ ] Build uploaded (`release.yml`, iOS lane) and selected on the version page
-- [ ] `asc metadata apply` run for the version
-- [ ] Screenshots uploaded (`asc screenshots upload --device-type IPHONE_69`)
+- [x] `asc metadata apply` run for the version
+- [x] Screenshots uploaded (`asc screenshots upload --device-type IPHONE_69`)
 - [ ] App Privacy answered (`asc validate --check-urls` confirms the URLs resolve)
-- [ ] Age rating done
-- [ ] Review notes pasted
+- [x] Age rating done (`asc age-rating edit --all-none`), categories, content rights, price and availability set with `asc`
+- [x] Review notes set (`asc review details-create`)
+- [ ] Contact name, phone and email under App Review Information, and untick "Sign-in required" (the API created the record with it on; changing it needs the contact fields)
+- [ ] App Privacy published (Data Not Collected). Not reachable through the public API
 - [ ] Trader status declared in the developer account (Business › Trader status)
 
 ## Export compliance note
