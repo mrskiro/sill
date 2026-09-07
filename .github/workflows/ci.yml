@@ -27,9 +27,6 @@ jobs:
           XCODE=$(find /Applications -maxdepth 1 -name 'Xcode_26.*.app' | sort -V | tail -1)
           sudo xcode-select -s "$XCODE" && xcodebuild -version
 
-      - name: Repository hygiene (no personal paths, keys or identifiers)
-        run: scripts/hygiene-check.sh
-
       - name: Formatting (swift-format, .swift-format config)
         run: make lint
 

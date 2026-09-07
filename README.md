@@ -17,7 +17,6 @@ make gen        # project.yml → Sill.xcodeproj（生成物。gitignore 済み�
 make build      # macOS + iOS simulator
 make test       # SillCore の swift test + Mac / iOS(simulator) アプリのホスト型テスト
 make device-check DEVICE=<xcrun devicectl list devices の Identifier>   # ペア済み iPhone との実機同期を自動検証
-make hygiene    # 公開リポジトリ向けの走査（個人のパス、メール、鍵、チーム ID、端末 UDID）
 make lint       # swift-format（設定は .swift-format）。make format で整形
 ```
 
@@ -30,7 +29,7 @@ make lint       # swift-format（設定は .swift-format）。make format で整
 
 ## CI / Release
 
-- CI（`.github/workflows/ci.yml`）: macOS 26 ランナー（その時点で最新の Xcode 26.x）で hygiene 走査、swift-format の lint、SillCore の `swift test`、Mac / iOS simulator のビルド。失敗時は xcresult を artifact に残す。署名と実機が要るホスト型テストはローカルの `make test` で回す。
+- CI（`.github/workflows/ci.yml`）: macOS 26 ランナー（その時点で最新の Xcode 26.x）で swift-format の lint、SillCore の `swift test`、Mac / iOS simulator のビルド。失敗時は xcresult を artifact に残す。署名と実機が要るホスト型テストはローカルの `make test` で回す。
 - Release（`.github/workflows/release.yml`）: `vX.Y.Z` タグで Developer ID 署名 + 公証済みの dmg（と SHA-256）を GitHub Release に添付する。アプリと dmg の両方を公証してチケットを貼るので、dmg から出したアプリもオフラインで起動する。dmg にしているのは /Applications へのドラッグを促すためで、zip を Downloads に置いたまま起動すると App Translocation でランダムな読み取り専用パスから動くことになる。Secrets（Developer ID 証明書、Developer ID の provisioning profile、App Store Connect API キー、Team ID）を設定するまで動かない。profile が要るのは `keychain-access-groups` が `application-identifier` を要求するためで、これは cloud signing では発行できないので手動署名で export する。詳細はワークフロー冒頭のコメント。
 - 同じタグで `release.yml` の iOS ジョブが `SillPhone` を Apple Distribution で archive し、App Store Connect にアップロードする（TestFlight に出る。ストアへの公開は Connect 側の手動操作）。必要な secret と提出時に貼る文面は [docs/app-store.md](docs/app-store.md)。
 - Pages（`.github/workflows/pages.yml`）: main の `site/` が変わったら、その中身をそのまま GitHub Pages に配信する。ビルド無し。

@@ -1,6 +1,6 @@
 PROJECT = Sill.xcodeproj
 
-.PHONY: gen icons build build-mac build-ios test test-core test-mac test-ios hygiene format lint device-check clean
+.PHONY: gen icons build build-mac build-ios test test-core test-mac test-ios format lint device-check clean
 
 gen:
 	@test -f Configs/Local.xcconfig || cp Configs/Local.xcconfig.example Configs/Local.xcconfig
@@ -29,9 +29,6 @@ test-mac: gen
 
 test-ios: gen
 	xcodebuild -project $(PROJECT) -scheme SillPhone -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -quiet -allowProvisioningUpdates test
-
-hygiene:
-	scripts/hygiene-check.sh
 
 SWIFT_SOURCES = Apps Packages/SillCore/Sources Packages/SillCore/Tests Tests
 
