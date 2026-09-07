@@ -129,9 +129,16 @@ final class EditorModel {
         textView.apply(edit)  // didChangeText() inside notifies the delegate, which autosaves
     }
 
+    /// Copies the note twice over: the Markdown itself, and an HTML rendering of it. Somewhere
+    /// that only takes text still gets the exact characters; somewhere that reads the rich
+    /// flavour — Slack, Docs, Mail, Notes — gets real lists and real emphasis instead of a line
+    /// that happens to start with a hyphen. The plain flavour is written last so it stays the
+    /// one a text-only target falls back to.
     func copyAsMarkdown() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
+        pasteboard.declareTypes([.html, .string], owner: nil)
+        pasteboard.setString(MarkdownHTML.fragment(from: text), forType: .html)
         pasteboard.setString(text, forType: .string)
     }
 

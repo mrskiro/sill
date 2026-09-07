@@ -138,6 +138,11 @@ CREATE TABLE peer (                     -- 信頼済み端末
   - `#` や `**` は消さずに `.tertiaryLabel` で沈める。記法を隠す live preview 型は採らない（カーソル行が変わるたびに本文が組み直され、Text preservation の見た目上の保証も崩れる）。
   - 実装は TextKit 2 の `NSTextContentStorageDelegate.textContentStorage(_:textParagraphWith:)`。レイアウトが段落を要求したときに装飾済みのコピーを返すだけで、**バックストアには一切属性を書かない**。入力経路に処理が乗らず、undo にも積まれず、保存されるのは打った文字列そのもの。
   - 判定は `SillCore/Editing/MarkdownHighlighting.swift` の純関数（段落 → 重ならない span 列）。フォントと色は各 OS 側。
+- **Copy as Markdown は 2 系統をクリップボードに載せる**。プレーンテキスト（Markdown そのもの）と HTML。
+  - 理由: 貼り付け先はリッチな側を読む。Slack のコンポーザは Quill で、プレーンテキストを貼っても `- ` は箇条書きにならない（入力中の自動変換であって貼り付けには効かない）。Slack 記法は標準 Markdown とも違う（太字は `*bold*`、斜体は `_italic_`）。HTML を併置すれば変換表を持たずに済み、Notion・Google Docs・メール・純正メモにも同時に効く。
+  - 変換は `SillCore/Editing/MarkdownHTML.swift` の純関数。語彙はツールバーが作れる範囲と同じで、インラインの判定は `MarkdownHighlighting` の span を再利用する（表示とコピーが食い違わない）。入れ子リストは親の `<li>` の中に入れる（`<ul>` 直下の `<ul>` は不正で、貼り付け先が断片ごと捨てうる）。
+  - チェックボックスは `☐` / `☑` の文字にする。HTML の `<input type=checkbox>` は多くの編集器が落とし、チェック状態ごと消える。
+  - Slack 独自形式（`slack/texty` を Chromium の custom MIME に載せる）は採らない。非公開形式で、デスクトップ限定。
 - フォント: システムフォント 14pt。
 
 ## 5. macOS: Dock アプリ + hotkey + Floating Window
@@ -406,3 +411,4 @@ sill/
 | 10 | Mac 同士 | 両方が listener 兼 client。device id の小さい方が dial する（`SyncRole`）。ペアリングはコードを貼る側が 1 回だけ dial |
 | 11 | 端末種別 | `hello` のオプショナル `kind`（mac / ios）で交換し `peer.kind` に保存。iOS は dial しない。プラットフォーム名にしたのは iPad でケースを増やさないため。未知の値は `.unknown` に落として読む（ケースを足しても旧版のデコードを壊さない）。オプショナルなので protocolVersion は据え置き |
 | 12 | Markdown の表示 | 記法を残したまま強調する。装飾は TextKit 2 の content storage delegate で描画時にだけ載せ、バックストアはプレーンのまま。記法を隠す live preview は採らない |
+| 13 | コピー | Copy as Markdown はプレーンテキストと HTML の 2 系統を載せる。貼り付け先はリッチな側を読むため。Slack 独自のクリップボード形式は採らない |
