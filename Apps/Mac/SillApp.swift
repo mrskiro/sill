@@ -26,6 +26,27 @@ struct SillApp: App {
                 Button("Toggle Notes Sidebar") { appDelegate.toggleSidebar() }
                     .keyboardShortcut("s", modifiers: [.command, .option])
             }
+            // The same `MarkdownEditing` commands the iOS keyboard toolbar offers.
+            CommandMenu("Format") {
+                Button("Heading") { appDelegate.format(MarkdownEditing.toggleHeading) }
+                Divider()
+                Button("Bold") { appDelegate.format { MarkdownEditing.toggleInline(.bold, in: $0, selection: $1) } }
+                    .keyboardShortcut("b", modifiers: [.command])
+                Button("Italic") { appDelegate.format { MarkdownEditing.toggleInline(.italic, in: $0, selection: $1) } }
+                    .keyboardShortcut("i", modifiers: [.command])
+                Button("Code") { appDelegate.format { MarkdownEditing.toggleInline(.code, in: $0, selection: $1) } }
+                Divider()
+                Button("Bulleted List") { appDelegate.format(MarkdownEditing.toggleBullet) }
+                    .keyboardShortcut("7", modifiers: [.command, .shift])
+                Button("Numbered List") { appDelegate.format(MarkdownEditing.toggleNumbered) }
+                    .keyboardShortcut("9", modifiers: [.command, .shift])
+                // No ⌘Return here: a menu key equivalent is dispatched before the responder
+                // chain, so it would shadow MarkdownTextView.keyDown, which already owns the
+                // shortcut and reaches the editor whether or not the app is active.
+                Button("Checklist") { appDelegate.format(MarkdownEditing.toggleCheckbox) }
+                Button("Outdent") { appDelegate.format(MarkdownEditing.outdent) }
+                Button("Indent") { appDelegate.format(MarkdownEditing.indent) }
+            }
             CommandMenu("Note") {
                 Toggle(
                     "Pin Window",
