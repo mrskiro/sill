@@ -120,8 +120,15 @@ public actor SyncClient {
                 }
                 let (fingerprint, certificateDeviceID) = try channel.peerIdentity()
                 if peer == nil { peer = try store.peer(fingerprint: fingerprint) }
-                guard let known = peer, hello.deviceID == known.id, certificateDeviceID == known.id else {
+                guard var known = peer, hello.deviceID == known.id, certificateDeviceID == known.id else {
                     throw SyncError.notPaired
+                }
+                if let kind = hello.kind, known.kind != kind {
+                    try store.addPeer(
+                        id: known.id, name: known.name, fingerprint: known.fingerprint, kind: kind,
+                        now: known.pairedAt)
+                    known.kind = kind
+                    peer = known
                 }
                 serverVector = hello.vector
                 watchdog.cancel()
@@ -181,7 +188,7 @@ public actor SyncClient {
             .hello(
                 .init(
                     deviceID: store.deviceID, name: store.deviceName, protocolVersion: helloProtocolVersion,
-                    vector: try store.vector())))
+                    vector: try store.vector(), kind: store.deviceKind)))
     }
 
     private func startRound(since serverVector: VersionVector, over channel: any SyncChannel) async throws {

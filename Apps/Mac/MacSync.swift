@@ -64,7 +64,7 @@ final class MacSync {
                 self.handle(event)
             }
         }
-        updateDialTargets(restart: true)
+        restartDialer()
     }
 
     func stop() {
@@ -112,7 +112,7 @@ final class MacSync {
         try? store.removePeer(id: id)
         refreshPeers()
         Task { [server] in await server.revoke(peerID: id) }
-        updateDialTargets(restart: wasDialled)
+        if wasDialled { restartDialer() }
     }
 
     /// Devices with a session open right now, either end.
@@ -137,7 +137,6 @@ final class MacSync {
             pairingPayload = nil
             refreshPeers()
             dialer.clearFailure()
-            updateDialTargets()
         case .synced(let peer, let changed):
             lastSyncAt = peer.lastSyncAt
             refreshPeers()
@@ -151,10 +150,9 @@ final class MacSync {
     private func handle(_ event: SyncClient.SessionEvent) {
         switch event {
         case .connected:
+            // Pairing dialled a peer the list did not have yet; refreshing it here is what gives
+            // the loop something to redial once this session ends.
             refreshPeers()
-            // Pairing dialled a peer the list did not have yet; without this the loop would have
-            // nothing to redial once this session ends.
-            updateDialTargets()
         case .synced(let peer, let changed):
             lastSyncAt = peer.lastSyncAt
             refreshPeers()
@@ -162,9 +160,7 @@ final class MacSync {
             if changed { Task { [server] in await server.poke() } }
             // Pairing dials whatever `SyncRole` says; once the round is done, hand the dialling
             // back to the Mac whose id owns it, so the two never hold a session each way.
-            if !SyncRole.shouldDial(myDeviceID: store.deviceID, peerID: peer.id) {
-                updateDialTargets(restart: true)
-            }
+            if !SyncRole.shouldDial(myDeviceID: store.deviceID, peerID: peer.id) { restartDialer() }
         case .ended:
             // A session that pairs and then fails the handshake (protocol mismatch) has already
             // stored the peer: pick it up so Settings can show and unpair it. The dialler is left
@@ -173,19 +169,17 @@ final class MacSync {
         }
     }
 
-    /// Recomputes who this Mac should be dialling. `restart` drops the session in progress, which
-    /// is what unpairing and handing the dialling over need; otherwise a live session is kept.
-    private func updateDialTargets(restart: Bool = false) {
-        let targets = SyncRole.dialTargets(myDeviceID: store.deviceID, peers: peers)
-        if restart {
-            dialer.restart(targets: targets)
-        } else {
-            dialer.setTargets(targets)
-        }
+    /// Drops the session in progress along with recomputing the list — what unpairing the dialled
+    /// peer and handing the dialling over need.
+    private func restartDialer() {
+        dialer.restart(targets: SyncRole.dialTargets(myDeviceID: store.deviceID, peers: peers))
     }
 
+    /// Every path that can change the peer list goes through here, and the dialler's targets follow
+    /// it: a peer added, renamed, or revealed to be a phone all land in the same place.
     private func refreshPeers() {
         peers = (try? store.peers()) ?? []
         lastSyncAt = peers.compactMap(\.lastSyncAt).max()
+        dialer.setTargets(SyncRole.dialTargets(myDeviceID: store.deviceID, peers: peers))
     }
 }

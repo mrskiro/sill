@@ -7,9 +7,12 @@ public final class NoteStore: Sendable {
     let writer: any DatabaseWriter
     public let deviceID: DeviceID
     public let deviceName: String
+    /// Told to peers in `hello` so they know whether dialling this device can ever work.
+    public let deviceKind: DeviceKind
 
     /// Creates the local device identity on first use; reuses it afterwards.
-    public init(database: AppDatabase, deviceName: String) throws {
+    public init(database: AppDatabase, deviceName: String, deviceKind: DeviceKind = .current) throws {
+        self.deviceKind = deviceKind
         writer = database.writer
         let record = try writer.write { db -> DeviceRecord in
             if var existing = try DeviceRecord.fetchOne(db) {

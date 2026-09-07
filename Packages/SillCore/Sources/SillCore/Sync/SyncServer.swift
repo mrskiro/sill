@@ -189,13 +189,18 @@ public actor SyncServer {
             try await channel.send(.bye("not paired"))
             throw SyncError.notPaired
         }
-        if known.name != hello.name {
-            try store.addPeer(id: known.id, name: hello.name, fingerprint: known.fingerprint, now: known.pairedAt)
+        if known.name != hello.name || (hello.kind != nil && known.kind != hello.kind) {
+            try store.addPeer(
+                id: known.id, name: hello.name, fingerprint: known.fingerprint, kind: hello.kind, now: known.pairedAt)
             known.name = hello.name
+            known.kind = hello.kind ?? known.kind
             peer = known
         }
         try await channel.send(
-            .hello(.init(deviceID: store.deviceID, name: store.deviceName, vector: try store.vector())))
+            .hello(
+                .init(
+                    deviceID: store.deviceID, name: store.deviceName, vector: try store.vector(),
+                    kind: store.deviceKind)))
     }
 
     private func sendChanges(since vector: VersionVector, over channel: any SyncChannel) async throws {
