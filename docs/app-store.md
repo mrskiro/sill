@@ -85,14 +85,14 @@ or it is rejected with "No suitable application records were found".
 ## Checklist before "Submit for Review"
 
 - [x] App record created in App Store Connect (browser; the public API cannot create apps)
-- [ ] Build uploaded (`release.yml`, iOS lane) and selected on the version page
+- [x] Build uploaded (`release.yml`, iOS lane) and selected on the version page (`asc versions attach-build`)
 - [x] `asc metadata apply` run for the version
 - [x] Screenshots uploaded (`asc screenshots upload --device-type IPHONE_69`)
 - [ ] App Privacy answered (`asc validate --check-urls` confirms the URLs resolve)
 - [x] Age rating done (`asc age-rating edit --all-none`), categories, content rights, price and availability set with `asc`
 - [x] Review notes set (`asc review details-create`)
-- [ ] Contact name, phone and email under App Review Information, and untick "Sign-in required" (the API created the record with it on; changing it needs the contact fields)
-- [ ] App Privacy published (Data Not Collected). Not reachable through the public API
+- [x] Contact name, phone and email under App Review Information, and untick "Sign-in required" (the API created the record with it on; changing it needs the contact fields)
+- [x] App Privacy published (Data Not Collected). Not reachable through the public API
 - [ ] Trader status declared in the developer account (Business › Trader status)
 
 ## Export compliance note
@@ -102,3 +102,17 @@ through Network.framework (OS-provided) and generates its device certificate wit
 is a standard-algorithm implementation rather than Apple's. Apple's own guidance treats standard
 algorithms as exempt from the questionnaire; whether a yearly self-classification report is owed is a
 separate question that the developer decides, not this file.
+
+## Submitting
+
+`asc validate --app 6809280142 --version <version> --check-urls` with zero errors, then:
+
+```sh
+asc versions attach-build --version-id <VERSION_ID> --build-id <BUILD_ID>
+asc review submit --app 6809280142 --version <version> --build-id <BUILD_ID> --confirm
+asc review status --app 6809280142
+```
+
+0.2.0 (build 10) was submitted this way on 2026-09-07 and is waiting for review. The App Store profile
+"Sill App Store" (`asc profiles create --profile-type IOS_APP_STORE`) and the Apple Distribution
+certificate both expire 2027-09-07.
