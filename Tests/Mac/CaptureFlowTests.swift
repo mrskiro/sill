@@ -291,6 +291,19 @@ struct CaptureFlowTests {
         #expect(NSPasteboard.general.string(forType: .string) == markdown)
     }
 
+    /// The rich flavour rides along so a paste into Slack or Docs lands as a real list. A
+    /// text-only target still reads the Markdown itself, unchanged.
+    @Test func copyAlsoCarriesAnHTMLFlavour() throws {
+        app.newNote()
+        try type("# Plan\n- one\n- **two**")
+        app.copyAsMarkdown()
+        #expect(NSPasteboard.general.string(forType: .string) == "# Plan\n- one\n- **two**")
+        #expect(
+            NSPasteboard.general.string(forType: .html)
+                == "<h1>Plan</h1><ul><li>one</li><li><strong>two</strong></li></ul>")
+        try pressEscape()
+    }
+
     @Test func editorNeverRewritesWhatWasTyped() throws {
         let textView = try textView()
         #expect(textView.isRichText == false)

@@ -1,6 +1,7 @@
 import SillCore
 import SwiftUI
 import UIKit
+import UniformTypeIdentifiers
 
 struct EditorView: View {
     @Bindable var draft: NoteDraft
@@ -13,11 +14,24 @@ struct EditorView: View {
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Button("Copy as Markdown", systemImage: "doc.on.doc") {
-                        UIPasteboard.general.string = draft.text
+                        copy(draft.text)
                     }
                 }
             }
     }
+}
+
+/// Copies the note twice over: the Markdown itself, and an HTML rendering of it. Somewhere that
+/// only takes text still gets the exact characters; somewhere that reads the rich flavour — Slack,
+/// Docs, Mail, Notes — gets real lists and real emphasis instead of a line that happens to start
+/// with a hyphen.
+func copy(_ markdown: String) {
+    UIPasteboard.general.items = [
+        [
+            UTType.utf8PlainText.identifier: markdown,
+            UTType.html.identifier: MarkdownHTML.fragment(from: markdown),
+        ]
+    ]
 }
 
 /// Plain UITextView with every automatic rewrite switched off, plus Return list continuation.

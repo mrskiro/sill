@@ -1,6 +1,7 @@
 import SillCore
 import Testing
 import UIKit
+import UniformTypeIdentifiers
 
 @testable import Sill
 
@@ -233,6 +234,17 @@ struct PhoneFlowTests {
         #expect((first.attribute(.font, at: 2, effectiveRange: nil) as? UIFont) == MarkdownHighlighter.headingFont)
         #expect(first.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor == .tertiaryLabel)
         model.path = []
+    }
+
+    /// Copy carries both flavours: the Markdown itself for text-only targets, and HTML so a paste
+    /// into Slack or Docs lands as a real list.
+    @Test func copyCarriesBothMarkdownAndHTML() {
+        let markdown = "# Plan\n- one\n- **two**"
+        copy(markdown)
+        #expect(UIPasteboard.general.string == markdown)
+        let html = UIPasteboard.general.data(forPasteboardType: UTType.html.identifier)
+            .flatMap { String(data: $0, encoding: .utf8) }
+        #expect(html == "<h1>Plan</h1><ul><li>one</li><li><strong>two</strong></li></ul>")
     }
 
     @Test func editorNeverRewritesWhatWasTyped() async throws {
