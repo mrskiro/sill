@@ -24,41 +24,23 @@ under pressure. The Mac app stays on Developer ID (`docs/distribution.md`); this
 
 ## Version information
 
-**Subtitle** (30 chars max)
+The copy lives in `metadata/` in the layout `asc` (App Store Connect CLI) reads, so it is applied
+rather than pasted: `metadata/app-info/en-US.json` holds the name, subtitle and privacy policy URL;
+`metadata/version/<version>/en-US.json` holds the description, keywords, promotional text, support and
+marketing URLs, and What's New. The version directory has to match the App Store version being
+prepared (rename it when the first store version is not 0.2.0).
 
-> Local-first Markdown notes
+```sh
+asc metadata validate --dir metadata                                   # offline, limits and shape
+asc metadata apply --app <APP_ID> --version 0.2.0 --dir metadata --dry-run
+asc metadata apply --app <APP_ID> --version 0.2.0 --dir metadata
+```
 
-**Promotional text** (170 chars, editable without a new build)
-
-> No account, no server. Notes stay on your iPhone and sync directly with your Mac when the two are near each other.
-
-**Description** (4000 chars max)
-
-> Sill is a small notepad for things you want to put down quickly and find again later.
->
-> Notes are plain Markdown and stay plain. No smart quotes, no auto-capitalization, no hidden formatting: what you type is what is stored, and you can copy any note out as text at any time.
->
-> Everything lives on your iPhone in a single local database. There is no account to create and no server in between, so Sill opens instantly and works the same with or without a network.
->
-> If you also use the free Sill app for Mac, pair the two once by scanning a QR code. From then on they sync directly whenever they are near each other, over your local network or peer-to-peer Wi-Fi, with mutual TLS between the two devices. Nothing passes through the internet. The Mac app is optional: Sill on iPhone is a complete notepad on its own.
->
-> Lists that keep up: Return continues bullets, numbers and checkboxes.
->
-> Quiet: no analytics, no ads, no notifications, no third-party SDKs. Sill collects no data at all.
->
-> Sill is free and open source under the MIT license. Source code, issue tracker and the Mac app: github.com/mrskiro/sill
-
-**Keywords** (100 chars max, comma-separated, no spaces after commas)
-
-> markdown,notes,notepad,local,offline,privacy,sync,mac,plain text,checklist,open source
-
-**What's New** (first version)
-
-> First release.
+Limits: subtitle 30, promotional text 170, description 4000, keywords 100 characters.
 
 ## Review notes
 
-Paste into "Notes" under App Review Information. The reviewer will not have a Mac.
+Goes into "Notes" under App Review Information (`asc review` can set it too). The reviewer will not have a Mac.
 
 > Sill is a standalone Markdown notepad. Creating, editing, listing and deleting notes all work on the iPhone alone with no account, no sign-in and no network.
 >
@@ -100,9 +82,11 @@ or it is rejected with "No suitable application records were found".
 
 ## Checklist before "Submit for Review"
 
+- [ ] App record created in App Store Connect (browser; the public API cannot create apps)
 - [ ] Build uploaded (`release.yml`, iOS lane) and selected on the version page
-- [ ] Screenshots uploaded
-- [ ] Privacy Policy URL, Support URL, App Privacy answered
+- [ ] `asc metadata apply` run for the version
+- [ ] Screenshots uploaded (`asc screenshots upload --device-type IPHONE_69`)
+- [ ] App Privacy answered (`asc validate --check-urls` confirms the URLs resolve)
 - [ ] Age rating done
 - [ ] Review notes pasted
 - [ ] Trader status declared in the developer account (Business › Trader status)
