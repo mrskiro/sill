@@ -7,8 +7,9 @@ under pressure. The Mac app stays on Developer ID (`docs/distribution.md`); this
 
 | Field | Value |
 |---|---|
-| Name | Sill |
+| Name | Sill Notes ("Sill" alone is taken by an unpublished app; the home-screen name stays Sill via `CFBundleDisplayName`) |
 | Bundle ID | `com.mrskiro.sill` |
+| App ID | 6809280142 (the `--app` for `asc`) |
 | Primary language | English (U.S.) |
 | Category | Productivity (secondary: Utilities) |
 | Price | Free |
@@ -32,8 +33,8 @@ prepared (rename it when the first store version is not 0.2.0).
 
 ```sh
 asc metadata validate --dir metadata                                   # offline, limits and shape
-asc metadata apply --app <APP_ID> --version 0.2.0 --dir metadata --dry-run
-asc metadata apply --app <APP_ID> --version 0.2.0 --dir metadata
+asc metadata apply --app 6809280142 --version 0.2.0 --dir metadata --dry-run
+asc metadata apply --app 6809280142 --version 0.2.0 --dir metadata
 ```
 
 Limits: subtitle 30, promotional text 170, description 4000, keywords 100 characters.
@@ -82,7 +83,7 @@ or it is rejected with "No suitable application records were found".
 
 ## Checklist before "Submit for Review"
 
-- [ ] App record created in App Store Connect (browser; the public API cannot create apps)
+- [x] App record created in App Store Connect (browser; the public API cannot create apps)
 - [ ] Build uploaded (`release.yml`, iOS lane) and selected on the version page
 - [ ] `asc metadata apply` run for the version
 - [ ] Screenshots uploaded (`asc screenshots upload --device-type IPHONE_69`)
