@@ -1,0 +1,8 @@
+{
+  "description": "Sill is a small notepad for things you want to put down quickly and find again later.\n\nNotes are plain Markdown and stay plain. No smart quotes, no auto-capitalization, no hidden formatting: what you type is what is stored, and you can copy any note out as text at any time.\n\nEverything lives on your iPhone in a single local database. There is no account to create and no server in between, so Sill opens instantly and works the same with or without a network.\n\nIf you also use the free Sill app for Mac, pair the two once by scanning a QR code. From then on they sync directly whenever they are near each other, over your local network or peer-to-peer Wi-Fi, with mutual TLS between the two devices. Nothing passes through the internet. The Mac app is optional: Sill on iPhone is a complete notepad on its own.\n\nLists that keep up: Return continues bullets, numbers and checkboxes.\n\nQuiet: no analytics, no ads, no notifications, no third-party SDKs. Sill collects no data at all.\n\nSill is free and open source under the MIT license. Source code, issue tracker and the Mac app: github.com/mrskiro/sill",
+  "keywords": "markdown,notes,notepad,local,offline,privacy,sync,mac,plain text,checklist,open source",
+  "marketingUrl": "https://mrskiro.github.io/sill/",
+  "promotionalText": "No account, no server. Notes stay on your iPhone and sync directly with your Mac when the two are near each other.",
+  "supportUrl": "https://mrskiro.github.io/sill/support.html",
+  "whatsNew": "First release."
+}
