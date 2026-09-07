@@ -269,10 +269,8 @@ print("macOS:")
 var macImages: [[String: Any]] = []
 for points in [16, 32, 128, 256, 512] {
   for scale in [1, 2] {
-    // scripts/hygiene-check.sh greps file contents for an email pattern, and
-    // Apple's usual scale suffix — at-sign, 2x, dot, png — matches it once the
-    // filename is recorded inside Contents.json. An underscore keeps the scan
-    // clean, and Contents.json carries the real scale either way.
+    // Underscore rather than Apple's usual at-sign before the scale suffix.
+    // Contents.json carries the real scale either way, so the name is free.
     let name = "icon_\(points)x\(points)\(scale == 1 ? "" : "_2x").png"
     write(render(.light, .macOS, pixels: points * scale), to: macSet.appendingPathComponent(name))
     macImages.append([
