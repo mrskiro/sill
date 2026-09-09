@@ -42,18 +42,27 @@ Limits: subtitle 30, promotional text 170, description 4000, keywords 100 charac
 
 ## Review notes
 
-Goes into "Notes" under App Review Information (`asc review` can set it too). The reviewer will not have a Mac.
+Paste into "Notes" under App Review Information (`asc review details-update --id <DETAIL_ID> --notes`).
+The reviewer will not have a Mac. The first submission came back with a "Guideline 2.1 Information
+Needed" request, which every new developer account gets: a screen recording from a physical iPhone
+plus answers to six standard questions. The notes now carry those answers so later submissions do not
+have to repeat them; the recording is attached to the review detail.
 
-> Sill is a standalone Markdown notepad. Creating, editing, listing and deleting notes all work on the iPhone alone with no account, no sign-in and no network.
+> Sill is a small, free, open-source Markdown notepad. There is no account, no sign-in, no server, no in-app purchase and no user-generated content shared between users. Creating, editing, listing and deleting notes all work on the iPhone alone.
 >
-> The Sync screen (toolbar button top-left) pairs the phone with the optional, free Sill app for macOS by scanning a QR code shown on the Mac. Without a Mac this screen simply shows the pairing instructions; nothing else in the app depends on it. The Local Network permission and the Bonjour service `_sill._tcp` exist only for that direct Mac-to-iPhone connection. No server is involved anywhere.
+> 1. Screen recording: see the attachment (recorded on an iPhone running the current iOS). It starts from launching the app and shows writing a note with a Markdown checklist, returning to the list, and the Sync screen. No registration, login, account deletion, content reporting or paid content exists in the app.
 >
-> The camera is used only to scan the pairing QR code.
+> 2. Purpose and audience: a personal notepad for quickly writing thoughts down as plain Markdown and finding them again. It is for people who want plain-text notes kept on their own devices with no account and no cloud. Its value is speed (it opens directly on the last note), text preservation (nothing rewrites the Markdown) and privacy (data never leaves the user's devices).
 >
-> Sill collects no data. The privacy policy is linked from the Sync screen and at https://mrskiro.github.io/sill/privacy.html
-
-Contact information in that section is the developer's own (name, phone, email). It is not shown publicly.
-
+> 3. Setup and access: nothing to set up. Launch the app and type; notes save automatically. The pencil button makes a new note and the back button returns to the list. The Sync screen (top-left button) is optional: it pairs the iPhone with the free companion app for macOS from the same developer (distributed outside the App Store, github.com/mrskiro/sill) by scanning a QR code shown on the Mac, after which the two devices exchange notes directly over the local network. Without a Mac the screen only shows the pairing instructions; everything else works. No credentials or sample files are needed.
+>
+> 4. External services: none. The app has no backend, analytics, advertising, authentication, payment or AI services. It uses Apple frameworks only (SwiftUI, UIKit, Network.framework with Bonjour for the local Mac connection, VisionKit to scan the pairing QR code, Keychain) plus two open-source libraries compiled into the binary: GRDB (local SQLite database) and swift-certificates / swift-crypto (the device certificate for the direct connection). The only destination outside the user's own devices is GitHub, and only when the user taps "Report an Issue", which opens the issue tracker in Safari.
+>
+> 5. Regional differences: none. The app behaves identically in every region; the interface is English only.
+>
+> 6. Regulated industry or protected third-party material: not applicable. The app contains no third-party content and is MIT-licensed open source at github.com/mrskiro/sill.
+>
+> The Local Network permission and the Bonjour service _sill._tcp exist only for the direct Mac-to-iPhone connection. The camera is used only to scan the pairing QR code. Privacy policy: https://mrskiro.github.io/sill/privacy.html
 ## Screenshots
 
 `scripts/app-store-screenshots.sh` boots the iPhone 17 Pro Max simulator, seeds a few notes through the
