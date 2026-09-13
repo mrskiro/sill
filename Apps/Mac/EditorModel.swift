@@ -108,6 +108,18 @@ final class EditorModel {
         }
     }
 
+    /// Tombstones any note from the list. The open one goes through `deleteCurrentNote`, so the
+    /// editor moves on to the next note instead of keeping text that no longer exists.
+    func deleteNote(id: UUID) {
+        guard id != note?.id else { return deleteCurrentNote() }
+        do {
+            try store.deleteNote(id: id)
+            onSaved?()
+        } catch {
+            log.error("delete failed: \(error)")
+        }
+    }
+
     func toggleSidebar() {
         isSidebarVisible.toggle()
     }

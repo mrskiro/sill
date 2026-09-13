@@ -150,7 +150,9 @@ extension CaptureFlowTests {
 
             #expect(side.sync.peers.isEmpty)
             #expect(side.sync.dialer.isDialling == false)
-            #expect(side.sync.dialer.failure == "that code is from this Mac")
+            #expect(side.sync.dialer.pairingFailure == "that code is from this Mac")
+            // A pasting mistake stays in Settings; the panel's header has no sync failure to warn about.
+            #expect(side.sync.failure == nil)
         }
 
         /// A dial that fails for good (the other Mac is on an older protocol) must not wedge the
@@ -190,6 +192,31 @@ extension CaptureFlowTests {
             // Mac B may hand the dialling straight back if its id says so, so the session is not
             // the thing to assert on — the failure being gone is.
             try await waitUntil { a.sync.dialer.failure == nil }
+        }
+
+        /// A refused code (the window closed before it was pasted) is a pasting mistake: Settings
+        /// says so, but the panel's header must not keep warning about sync until the next restart.
+        @Test func aRefusedCodeIsReportedInSettingsNotAsASyncFailure() async throws {
+            let a = try makeSide("Mac A")
+            let b = try makeSide("Mac B")
+            defer {
+                a.sync.stop()
+                b.sync.stop()
+                try? a.identityStore.delete()
+                try? b.identityStore.delete()
+            }
+            a.sync.start()
+            b.sync.start()
+            try await waitUntil { a.sync.port != nil && b.sync.port != nil }
+            a.sync.dialer.endpointOverride = endpoint(b.sync.port!)
+
+            let code = await b.sync.beginPairing()
+            await b.sync.endPairing()
+            a.sync.pair(with: code)
+            try await waitUntil { a.sync.dialer.pairingFailure != nil }
+            #expect(a.sync.dialer.pairingFailure == "pairing rejected")
+            #expect(a.sync.failure == nil)
+            #expect(a.sync.statusText == "Pairing failed: pairing rejected")
         }
 
         /// The relay: a phone paired with one Mac sees what is written on the other, and back.

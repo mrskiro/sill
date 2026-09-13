@@ -31,7 +31,7 @@ Mac's Settings.
 - No menu bar icon and no background updater. It looks for updates only when asked.
 
 Mac keys: **⌥S** show/hide (configurable), **Esc** close, **⌘N** new note,
-**⌘⇧C** copy as Markdown, **⌥⌘S** sidebar, **⌘⌫** delete, **⌘⇧P** pin,
+**⌘⇧C** copy as Markdown, **⌥⌘S** sidebar, **⌫** in the sidebar deletes a note,
 **Return / Tab / ⇧Tab / ⌘Return** for lists.
 
 To pair, open Settings (⌘,) on the Mac and choose **Pair a Device…**. From an
