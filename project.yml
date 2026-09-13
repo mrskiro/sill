@@ -57,6 +57,8 @@ targets:
         com.apple.security.app-sandbox: true
         com.apple.security.network.client: true
         com.apple.security.network.server: true
+        # "Export Notes…" writes a folder of .md files wherever the save panel points.
+        com.apple.security.files.user-selected.read-write: true
         # Keychain Sharing makes Xcode embed a provisioning profile, which grants the
         # application-identifier the data-protection keychain requires (device identity).
         keychain-access-groups:

@@ -145,6 +145,24 @@ CREATE TABLE peer (                     -- 信頼済み端末
   - Slack 独自形式（`slack/texty` を Chromium の custom MIME に載せる）は採らない。非公開形式で、デスクトップ限定。
 - フォント: システムフォント 14pt。
 
+### Export（Mac のみ）
+
+File ▸ Export Notes… で、生存ノート全部を「1 ノート 1 ファイル」の `.md` としてフォルダに書き出す。
+
+- **3 節の保存形式の決定は動かさない**。真実は SQLite のままで、これは片方向・一回きりの出口。import は作らない。フォルダを監視して同期する方向には育てない。
+- iOS には置かない。Copy as Markdown で足りるうえ、Files 連携・UTType 宣言・実機確認が丸ごと要らなくなる。必要になったら共有シート 1 個で足せる。
+- 本文は `content` をそのまま（UTF-8、BOM 無し、末尾改行を足さない）。上に YAML front matter だけを載せる。フィールド名は Joplin の "Markdown + Front Matter"（Obsidian・Hugo も読める）に合わせて `title` / `created` / `updated`、加えて Sill の note id を `id`。日付は RFC 3339（`2026-09-07T12:34:56+09:00`）。
+- ファイル名はタイトル（`NoteTitle`）から。`/` `:` と制御文字を落とし、先頭のドットを外し、UTF-8 200 byte で文字境界で切る（APFS の上限は 255 byte で、1 文字が 4 byte になりうる）。空になったら作成日時。衝突は ` 2` ` 3`。
+- 衝突判定は `lowercased()` ではなく **case folding**（`folding(options: .caseInsensitive)`）+ NFC。case-insensitive な APFS は `ß` を `ss`、`ﬁ` を `fi` に畳むので、`straße.md` と `STRASSE.md` は同じファイルになる。lowercase では別名に見え、後から書いた方が黙って前を潰す。畳みすぎても余分な ` 2` が付くだけなので、強い方に倒す。実ディスクに書いて件数を数えるテストを置いてある。
+- front matter の `title` は制御文字を `\xNN` にエスケープする。YAML は引用符の中でも生の制御文字を受け付けない。ターミナルの出力を貼れば ESC が 1 行目に入りうる。本文側は何もしない。
+- 並びは `createdAt` 昇順（同時刻は id）。UI の `updatedAt` 順で採番すると、同じタイトルのどちらが素の名前を取るかが編集のたびに入れ替わる。
+- 変換は `SillCore/Editing/MarkdownExport.swift` の純関数 `[Note] -> [File]`。名前の衝突と切り詰めは `swift test` で回す。
+- 出力先は `NSOpenPanel`（`canChooseDirectories`）で「置き場所」を選ばせ、その中に `Sill Notes` フォルダを**新しく作って**書く。既にあれば `Sill Notes 2`（ブラウザのダウンロードと同じ）。`NSSavePanel` は採らない: 既存フォルダ名を打つとそのフォルダに入ってしまって返してくれず、Replace の確認もフォルダ自体にしか掛からない。中の `.md` は黙って潰される。
+- **自分が作ったファイル以外に触らない**のが不変条件。Obsidian の vault を選ばれても、そこにある `Standup.md` は無事。途中で失敗したら作りかけのフォルダごと消すが、消してよいのは「自分の mkdir が作った」と言い切れる時だけ。名前の空きは `fileExists` ではなく属性の読み取り（lstat 相当）で見る。`fileExists` は symlink を辿るので、リンク切れのエイリアスを「空き」と答える。作成は `withIntermediateDirectories: false` にして、既に何かある名前では mkdir 自体を失敗させる。これが無いと、リンク切れの `Sill Notes` を掴んで作成に失敗し、後片付けでユーザーのエイリアスを消す経路が残る。
+- 連番は「その回の並び順」であって ID ではない。同じタイトルの古い方を消して再 export すると番号がずれる。毎回新しいフォルダに出すのはこれを無害にするため。
+- パネルは `nonactivatingPanel` なので、`runModal()` の前に `NSApp.activate()` する。しないとモーダルが他アプリの裏に出る。
+- App Sandbox に `com.apple.security.files.user-selected.read-write` が要る。
+
 ## 5. macOS: Dock アプリ + hotkey + Floating Window
 
 - 形態: **Dock アプリ（通常の activation policy）**。メニューバーアイコンは置かず、同期状態はウィンドウ内フッターに小さく出す。Apple メモと同じ入口（Dock / ⌘Tab）に、Raycast Notes と同じ hotkey の入口を足す。
@@ -412,3 +430,4 @@ sill/
 | 11 | 端末種別 | `hello` のオプショナル `kind`（mac / ios）で交換し `peer.kind` に保存。iOS は dial しない。プラットフォーム名にしたのは iPad でケースを増やさないため。未知の値は `.unknown` に落として読む（ケースを足しても旧版のデコードを壊さない）。オプショナルなので protocolVersion は据え置き |
 | 12 | Markdown の表示 | 記法を残したまま強調する。装飾は TextKit 2 の content storage delegate で描画時にだけ載せ、バックストアはプレーンのまま。記法を隠す live preview は採らない |
 | 13 | コピー | Copy as Markdown はプレーンテキストと HTML の 2 系統を載せる。貼り付け先はリッチな側を読むため。Slack 独自のクリップボード形式は採らない |
+| 14 | Export | Mac のみ。`NSOpenPanel` で選んだ場所に新規 `Sill Notes` フォルダを作り 1 ノート 1 ファイルの `.md`。front matter は `id` / `title` / `created` / `updated`、本文はそのまま。片方向で import は持たず、8 番（保存形式は SQLite）は据え置き |

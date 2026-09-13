@@ -24,6 +24,8 @@ Mac's Settings.
 - **⌥S** opens a floating panel over whatever you are doing. **Esc** hides it.
 - Notes live in a single SQLite file on the device. Nothing waits on a network.
 - Plain Markdown in, plain Markdown out. No smart quotes, no auto-capitalization.
+- **File ▸ Export Notes…** on the Mac writes every note into a folder as `.md` files,
+  each with a small YAML header. Your text leaves as the text you typed.
 - Pair once, then your devices sync over mutual TLS whenever they can reach each
   other on the local network. Two Macs sync with each other as well.
 - No menu bar icon and no background updater. It looks for updates only when asked.
