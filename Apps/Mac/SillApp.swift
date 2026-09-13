@@ -52,17 +52,10 @@ struct SillApp: App {
                 Button("Indent") { appDelegate.format(MarkdownEditing.indent) }
             }
             CommandMenu("Note") {
-                Toggle(
-                    "Pin Window",
-                    isOn: Binding(
-                        get: { appDelegate.panelState.isPinned },
-                        set: { appDelegate.setPinned($0) }
-                    )
-                )
-                .keyboardShortcut("p", modifiers: [.command, .shift])
-                Divider()
+                // No ⌘⌫: a menu key equivalent is dispatched before the text view, so it would take
+                // "delete to the start of the line" away from the editor and delete the note instead.
+                // From the keyboard, the Delete key on the selected row in the sidebar does it.
                 Button("Delete Note") { appDelegate.deleteCurrentNote() }
-                    .keyboardShortcut(.delete, modifiers: [.command])
             }
             // Under "About Sill" in the app menu, where a Sparkle-style updater would sit.
             CommandGroup(after: .appInfo) {

@@ -2,6 +2,8 @@
 
 状態: v1 確定（2026-09-04）。判断基準は「MVP 要件を満たす最も単純な案」。変更は末尾の決定事項表を更新して残す。
 
+思想: Sill のノートは**フロー情報**のためのもの。クイックに書き、短期で使い、ミニマムに保つ。長く残すもの（ストック情報）は Sill から外へ移す。機能を足すかどうかはこの前提で判断する。
+
 ## 前提（2026-09-04 時点で確認済みの事実）
 
 | 項目 | 事実 | 出典 |
@@ -160,21 +162,22 @@ File ▸ Export Notes… で、生存ノート全部を「1 ノート 1 ファ�
 - 出力先は `NSOpenPanel`（`canChooseDirectories`）で「置き場所」を選ばせ、その中に `Sill Notes` フォルダを**新しく作って**書く。既にあれば `Sill Notes 2`（ブラウザのダウンロードと同じ）。`NSSavePanel` は採らない: 既存フォルダ名を打つとそのフォルダに入ってしまって返してくれず、Replace の確認もフォルダ自体にしか掛からない。中の `.md` は黙って潰される。
 - **自分が作ったファイル以外に触らない**のが不変条件。Obsidian の vault を選ばれても、そこにある `Standup.md` は無事。途中で失敗したら作りかけのフォルダごと消すが、消してよいのは「自分の mkdir が作った」と言い切れる時だけ。名前の空きは `fileExists` ではなく属性の読み取り（lstat 相当）で見る。`fileExists` は symlink を辿るので、リンク切れのエイリアスを「空き」と答える。作成は `withIntermediateDirectories: false` にして、既に何かある名前では mkdir 自体を失敗させる。これが無いと、リンク切れの `Sill Notes` を掴んで作成に失敗し、後片付けでユーザーのエイリアスを消す経路が残る。
 - 連番は「その回の並び順」であって ID ではない。同じタイトルの古い方を消して再 export すると番号がずれる。毎回新しいフォルダに出すのはこれを無害にするため。
-- パネルは `nonactivatingPanel` なので、`runModal()` の前に `NSApp.activate()` する。しないとモーダルが他アプリの裏に出る。
+- `runModal()` の前に `NSApp.activate()` する。メニューから来るなら Sill は既に前面だが、非アクティブのまま呼ばれるとモーダルが他アプリの裏に出る。
 - App Sandbox に `com.apple.security.files.user-selected.read-write` が要る。
 
 ## 5. macOS: Dock アプリ + hotkey + Floating Window
 
-- 形態: **Dock アプリ（通常の activation policy）**。メニューバーアイコンは置かず、同期状態はウィンドウ内フッターに小さく出す。Apple メモと同じ入口（Dock / ⌘Tab）に、Raycast Notes と同じ hotkey の入口を足す。
+- 形態: **Dock アプリ（通常の activation policy）**。メニューバーアイコンは置かない。同期状態は Settings に出し、ウィンドウには失敗したときだけヘッダーに ⚠︎（ホバーで理由、クリックで Settings）を出す。ヘッダーは左に信号機とサイドバー開閉、右に状態アイコンと新規作成だけを置き、文字は出さない（タイトルは本文 1 行目と重複し、`⌥S` は変更後の hotkey を反映しない）。Apple メモと同じ入口（Dock / ⌘Tab）に、Raycast Notes と同じ hotkey の入口を足す。
 - ウィンドウは 1 つだけ。`NSPanel` サブクラス:
-  - `styleMask: [.nonactivatingPanel, .titled, .fullSizeContentView, .resizable, .closable]`、タイトルバー透明
+  - `styleMask: [.titled, .fullSizeContentView, .resizable, .closable, .miniaturizable]`、タイトルバー透明
+  - 信号機（閉じる / しまう / 拡大）は出す。Apple メモの置き換えなので、マウスで閉じる手段を OS 標準の場所に置く。閉じる（⌘W 含む）は `close()` を上書きして Esc と同じ「隠す」（flush + `orderOut`）にし、ウィンドウは破棄しない。しまうときも flush する。ヘッダーは信号機の幅だけ左を空ける
   - `isFloatingPanel = true`, `level = .floating`, `collectionBehavior = [.moveToActiveSpace, .managed, .fullScreenAuxiliary]`（`canJoinAllSpaces` は Mission Control から除外されるので使わない）, `hidesOnDeactivate = false`, `isMovableByWindowBackground = true`
-  - hotkey からは `nonactivatingPanel` の性質でアプリを activate せずに key にする。前面アプリはそのまま。Esc で `orderOut` + 必要なら `NSApp.hide` でフォーカスを戻す
+  - hotkey で出すとき（`orderFront` の後に `NSApp.activate()`）もクリックしたときも Sill を activate する。メニューバーが Sill になり、Format / Note / Export に届く。当初は `nonactivatingPanel` で前面アプリを保っていたが、Dock アプリなのにメニューに届かず、モーダルが他アプリの裏に出るので廃止。Esc で `orderOut` + `NSApp.hide` で元のアプリにフォーカスを戻す
   - Dock クリック（`applicationShouldHandleReopen`）でも同じパネルを出す
 - 中身は `NSHostingView`（SwiftUI）。エディタ部分だけ `NSViewRepresentable`。
-- 挙動: hotkey でトグル、Esc で隠す、外をクリックしたら隠す（pin 中は隠さない）。pin = 常に最前面 + 自動で隠れない。位置・サイズは autosave。
+- 挙動: hotkey でトグル、Esc / 閉じるボタン / ⌘W で隠す。常に最前面（`level = .floating`）で、外をクリックしても隠れない。フローのメモは参照元の横で書くので、参照元をクリックした瞬間に消えては困る。後ろに回る普通のウィンドウのモードや pin の切り替えは持たない（ストック用途の形で、Sill には要らない）。位置・サイズは autosave。
 - hotkey / Dock で開くのは **最後に編集したノート**。⌘N で新規。新規ノートは最初の非空白文字が入るまで DB に insert しない。
-- 通常アプリでも hotkey 経由はアプリが inactive のまま key window になるので、⌘C / ⌘V / ⌘Z は `NSApp.mainMenu` の Edit メニューで拾う（SwiftUI `App` の標準メニューで足りる）。
+- パネルを出すとアプリは active になるので、⌘C / ⌘V / ⌘Z は SwiftUI `App` の標準 Edit メニューで拾える。
 - 表示レイテンシは `os_signpost` で計測し、hotkey → 入力可能まで 100ms 未満。
 
 ## 6. Global Shortcut
@@ -387,7 +390,7 @@ sill/
 | 7 | iOS: 一覧・エディタ・autosave | Scenario C | 済 |
 | 8 | Sync engine（純関数）+ 収束テスト（3 端末シミュレーション、ランダム操作） | 生存集合一致・文章消失なしが緑 | 済（16 seed × 400 操作） |
 | 9 | Transport と engine を結合、QR ペアリング | Scenario D / E を実機で通す | 済。`make device-check DEVICE=<id>` で実機の双方向同期を自動検証 |
-| 10 | pin、同期状態表示、hotkey recorder、unpair | 仕上げ | 済（pin は ⌘⇧P、hotkey は Settings で変更） |
+| 10 | pin、同期状態表示、hotkey recorder、unpair | 仕上げ | 済（hotkey は Settings で変更。pin は後に削除、5 節） |
 | 11 | Mac ↔ Mac 同期（`MacDialer` + `SyncRole` + コード貼り付けペアリング） | 2 台の Mac が 1 本の接続で双方向に同期し、片方に繋いだ iPhone にも中継で届く | 済（`Tests/Mac/MacToMacSyncTests.swift` で id の順序を両方通す。実機確認は 15 節） |
 
 テスト方針: SillCore は `swift test`（同期セッションはメモリ内チャネルで、識別は swift-certificates の証明書で検証）。実機は `scripts/device-sync-check.sh`: Mac を `SILL_DEBUG=1` で起動して `sill://debug/...` で操作し、iPhone は `devicectl` の環境変数でノートを作らせ、両 DB（iPhone 側は `devicectl device copy from` で取得）で到達を確認する。両アプリは `Application Support/Sill/sync.log` に同期の経過を残す。ホスト型テストでは 127.0.0.1 上で本物の相互 TLS（pinning）を張り、アプリの listener / client と結合した端末間フローまで通す。Mac の UI 挙動は Sill.app 内で動くホスト型テスト（`Tests/Mac`）で、NSTextView に実際のキーイベントを流して検証する。iOS も同様に simulator 上の Sill.app 内で動くホスト型テスト（`Tests/iOS`）で、UITextView の `insertText` 経路（実キーボードと同じ）を通す。`SILL_TEST_MODE=1` で使い捨て DB を使い、Mac ではパネルが key にならず accessory ポリシーで起動する（他アプリへの入力を奪わない）。XcodeGen の sources は `syncedFolder` にしてあり、ファイル追加で再生成は不要。
@@ -431,3 +434,7 @@ sill/
 | 12 | Markdown の表示 | 記法を残したまま強調する。装飾は TextKit 2 の content storage delegate で描画時にだけ載せ、バックストアはプレーンのまま。記法を隠す live preview は採らない |
 | 13 | コピー | Copy as Markdown はプレーンテキストと HTML の 2 系統を載せる。貼り付け先はリッチな側を読むため。Slack 独自のクリップボード形式は採らない |
 | 14 | Export | Mac のみ。`NSOpenPanel` で選んだ場所に新規 `Sill Notes` フォルダを作り 1 ノート 1 ファイルの `.md`。front matter は `id` / `title` / `created` / `updated`、本文はそのまま。片方向で import は持たず、8 番（保存形式は SQLite）は据え置き |
+| 15 | Mac のウィンドウ | 常に最前面、外をクリックしても隠れない。ただし Settings（通常レベル）を使っている間はパネルも通常レベルに下げ、閉じたら戻す（下げないと Settings がパネルの下に出て前に出せない）。Settings は SwiftUI の入口からしか開けないので、AppKit 側からはアプリメニューの Settings… 項目を実行する（`showSettingsWindow:` は警告を出すだけで開かない）。信号機は出し、閉じるは隠すだけ。pin（Pin Window / ⌘⇧P）と最前面の切り替えは持たない。フロー情報のメモは参照元の横で書くため |
+| 16 | Mac のヘッダー | 左に信号機とサイドバー開閉、右に新規作成。文字は出さない。同期状態は Settings に置き、失敗時だけ ⚠︎ を出す |
+| 17 | Mac のアクティベーション | パネルを出す・クリックすると Sill を activate する（`nonactivatingPanel` は使わない）。メニュー（Export など）に届かせるため。Esc / 閉じるで `NSApp.hide` し元のアプリへ戻す |
+| 18 | Mac の削除 | Apple メモと同じくサイドバーの行を Control-クリック / スワイプで Delete、加えて選択行で ⌫。Note ▸ Delete Note は残すがショートカットは付けない（⌘⌫ はメニューがテキストビューより先に拾い、入力中の「行頭まで削除」がノート削除になっていた）。確認ダイアログは据え置き |

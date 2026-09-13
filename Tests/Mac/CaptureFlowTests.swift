@@ -116,6 +116,27 @@ struct CaptureFlowTests {
         #expect(app.panel.firstResponder === (try textView()))
     }
 
+    @Test func closeButtonHidesAndSavesLikeEscape() async throws {
+        app.newNote()
+        try type("closing via the button")
+        app.panel.performClose(nil)  // what the close button and ⌘W send
+        #expect(!app.panel.isVisible)
+        let saved = try #require(app.model.note)
+        #expect(try app.store.note(id: saved.id)?.content == "closing via the button")
+
+        app.showPanel()
+        #expect(app.panel.isVisible)
+        #expect(app.model.note?.id == saved.id)
+    }
+
+    @Test func minimizedPanelComesBackOnShow() async throws {
+        app.showPanel()
+        app.panel.miniaturize(nil)
+        try await waitUntil(timeout: .seconds(3)) { self.app.panel.isMiniaturized }
+        app.showPanel()
+        try await waitUntil(timeout: .seconds(3)) { self.app.panel.isVisible && !self.app.panel.isMiniaturized }
+    }
+
     @Test func emptyNewNoteIsNeverStored() async throws {
         let before = try app.store.liveNotes().count
         app.newNote()
@@ -227,6 +248,70 @@ struct CaptureFlowTests {
         #expect(!app.model.isSidebarVisible)
     }
 
+    @Test func deletingAnotherNoteFromTheListKeepsTheOpenOne() async throws {
+        app.newNote()
+        try type("to be deleted")
+        app.newNote()  // flushes "to be deleted"
+        try type("still open")
+        try await waitForAutosave()
+        let open = try #require(app.model.note)
+        let other = try #require(try app.store.liveNotes().first { $0.title == "to be deleted" })
+
+        app.deleteNote(id: other.id)  // no confirmation dialog in test mode
+        #expect(try app.store.note(id: other.id)?.isDeleted == true)
+        #expect(app.model.note?.id == open.id)
+        #expect(try textView().string == "still open")
+
+        app.deleteNote(id: open.id)  // the open one moves the editor on, like Delete Note
+        #expect(try app.store.note(id: open.id)?.isDeleted == true)
+        #expect(app.model.note?.id != open.id)
+    }
+
+    /// The sync warning opens Settings through this. Settings has to actually open, land in front
+    /// of the always-on-top panel, and leave the panel floating again once it closes.
+    @Test func settingsOpensInFrontOfThePanel() async throws {
+        app.showPanel()
+        app.showSettings()
+        var settings: NSWindow?
+        try await waitUntil {
+            settings = NSApp.windows.first { $0 !== self.app.panel && $0.isVisible && $0.level == .normal }
+            return settings != nil
+        }
+        let window = try #require(settings)
+        NotificationCenter.default.post(name: NSWindow.didBecomeKeyNotification, object: window)
+        #expect(app.panel.level == .normal)
+
+        window.close()
+        #expect(app.panel.level == .floating)
+    }
+
+    /// ⌘⌫ means "delete to the start of the line" while typing. The menu sees key equivalents
+    /// before the text view does, so a Delete Note shortcut on it would take the note instead.
+    @Test func commandDeleteWhileTypingNeverDeletesTheNote() async throws {
+        app.newNote()
+        try type("keep this note")
+        try await waitForAutosave()
+        let open = try #require(app.model.note)
+        func commandKey(_ characters: String, keyCode: UInt16) throws -> NSEvent {
+            try #require(
+                NSEvent.keyEvent(
+                    with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+                    windowNumber: app.panel.windowNumber, context: nil,
+                    characters: characters, charactersIgnoringModifiers: characters, isARepeat: false,
+                    keyCode: keyCode
+                ))
+        }
+        let mainMenu = try #require(NSApp.mainMenu)
+        // Control: the menu does claim a key equivalent it owns, so a miss below is real.
+        #expect(mainMenu.performKeyEquivalent(with: try commandKey("b", keyCode: 11)))
+
+        for characters in ["\u{7F}", "\u{08}"] {
+            let claimed = mainMenu.performKeyEquivalent(with: try commandKey(characters, keyCode: 51))
+            #expect(!claimed, "menu claimed ⌘⌫ (\(characters.unicodeScalars.first!.value))")
+        }
+        #expect(try app.store.note(id: open.id)?.isDeleted == false)
+    }
+
     @Test func syncedChangesToTheOpenNoteShowUpOrGetCopiedAside() async throws {
         let phone = UUID()
         try app.store.addPeer(id: phone, name: "Phone", fingerprint: Data(repeating: 1, count: 32))
@@ -261,17 +346,13 @@ struct CaptureFlowTests {
         try app.store.removePeer(id: phone)
     }
 
-    @Test func pinnedPanelStaysWhenAnotherWindowTakesFocus() async throws {
+    /// A flow note is written next to whatever it came from, so clicking that window must not
+    /// make the note vanish.
+    @Test func panelStaysWhenAnotherWindowTakesFocus() async throws {
         app.showPanel()
-        app.setPinned(true)
         NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: app.panel)
         #expect(app.panel.isVisible)
-        #expect(app.panelState.isPinned)
-
-        app.setPinned(false)
-        NotificationCenter.default.post(name: NSWindow.didResignKeyNotification, object: app.panel)
-        #expect(!app.panel.isVisible)
-        app.showPanel()
+        #expect(app.panel.level == .floating)
     }
 
     @Test func showingThePanelAgainIsFast() async throws {
@@ -318,9 +399,14 @@ struct CaptureFlowTests {
         #expect(KeyboardShortcuts.getShortcut(for: .togglePanel) == .init(.s, modifiers: [.option]))
     }
 
-    @Test func panelStaysOutOfTheWayOfOtherApps() {
+    @Test func panelFloatsAndActivatesSill() {
         app.showPanel()
-        #expect(app.panel.styleMask.contains(.nonactivatingPanel))
+        // Clicking the panel activates Sill, so its menus (Export, Delete Note…) are reachable.
+        #expect(!app.panel.styleMask.contains(.nonactivatingPanel))
+        #expect(app.panel.styleMask.isSuperset(of: [.closable, .miniaturizable, .resizable]))
+        for button in [NSWindow.ButtonType.closeButton, .miniaturizeButton, .zoomButton] {
+            #expect(app.panel.standardWindowButton(button)?.isHidden == false)
+        }
         #expect(app.panel.level == .floating)
         #expect(app.panel.collectionBehavior.contains(.managed))
         #expect(app.panel.collectionBehavior.contains(.moveToActiveSpace))

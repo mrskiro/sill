@@ -14,7 +14,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private(set) var model: EditorModel!
     private(set) var panel: FloatingPanel!
     private(set) var sync: MacSync?
-    let panelState = PanelState()
     private let signposter = OSSignposter(subsystem: "com.mrskiro.sill", category: "panel")
     private let log = Logger(subsystem: "com.mrskiro.sill", category: "panel")
 
@@ -55,12 +54,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         let screen = EditorScreen(
-            model: model, sync: sync, panelState: panelState,
+            model: model, sync: sync,
             onEscape: { [weak self] in self?.hidePanel() },
-            onNewNote: { [weak self] in self?.newNote() }
+            onNewNote: { [weak self] in self?.newNote() },
+            onOpenSettings: { [weak self] in self?.showSettings() },
+            onDeleteNote: { [weak self] id in self?.deleteNote(id: id) }
         )
         panel = FloatingPanel(contentView: NSHostingView(rootView: screen))
-        panelState.isPinned = panel.isPinned
         panel.onHide = { model.flush() }
         panel.onEscape = { [weak self] in self?.hidePanel() }
         panel.keyless = Self.isTestMode
@@ -96,8 +96,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     sync?.poke()
                 }
             case "/settings":
-                NSApp.activate()
-                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                showSettings()
             case "/delete":
                 if let prefix = query.first(where: { $0.name == "title" })?.value, let notes = try? store.liveNotes() {
                     for note in notes where note.title.hasPrefix(prefix) { try? store.deleteNote(id: note.id) }
@@ -124,10 +123,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let start = ContinuousClock.now
         let state = signposter.beginInterval("Show panel")
         model.loadLastNoteIfNeeded()
-        // After Esc from a Dock/⌘Tab activation the app is hidden; bring the panel back
-        // without stealing activation from whatever the user is doing now.
+        // Esc hides the app to hand focus back, so it has to be unhidden before the panel can show.
         if NSApp.isHidden { NSApp.unhideWithoutActivation() }
         panel.show()
+        // Activating puts Sill's menus (Format, Note, Export…) in the menu bar. Done after ordering
+        // front, so the didBecomeActive it triggers already finds the panel visible. Tests never take focus.
+        if !Self.isTestMode { NSApp.activate() }
         signposter.endInterval("Show panel", state)
         let elapsed = ContinuousClock.now - start
         lastShowLatency = elapsed
@@ -137,15 +138,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Hotkey → panel on screen with the editor focused. Watched by tests; goal < 100 ms.
     private(set) var lastShowLatency: Duration?
 
-    func setPinned(_ pinned: Bool) {
-        panel.isPinned = pinned
-        panelState.isPinned = pinned
-    }
-
     func hidePanel() {
         panel.hide()
-        // Give focus back to the previous app when Sill had been activated via Dock or ⌘Tab.
+        // Give focus back to the app the user came from.
         if NSApp.isActive { NSApp.hide(nil) }
+    }
+
+    /// Activates first so Settings never opens behind the front app (the debug URL arrives from outside).
+    ///
+    /// SwiftUI opens its Settings scene only from its own entry points — `SettingsLink`, the
+    /// `openSettings` action, the app menu item. The old `showSettingsWindow:` selector just logs
+    /// "Please use SettingsLink" and opens nothing. The menu item is the one AppKit code can reach.
+    func showSettings() {
+        if !Self.isTestMode { NSApp.activate() }
+        guard let appMenu = NSApp.mainMenu?.items.first?.submenu,
+            let index = appMenu.items.firstIndex(where: {
+                $0.keyEquivalent == "," && $0.keyEquivalentModifierMask == .command
+            })
+        else { return }
+        appMenu.performActionForItem(at: index)
     }
 
     func newNote() {
@@ -164,8 +175,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// panel makes it navigate into that folder instead of returning it, and the Replace it offers
     /// covers the folder, never the files inside one.
     ///
-    /// The app's own window is non-activating, so without activating first the modal can open
-    /// behind whatever the user was working in.
+    /// Activates first: the menu item is only reachable with Sill active, but the call keeps the
+    /// modal from opening behind another app if it is ever reached some other way.
     func exportNotes() {
         NSApp.activate()
         let openPanel = NSOpenPanel()
@@ -214,15 +225,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func deleteCurrentNote() {
         guard model.note != nil || !model.text.isEmpty else { return }
-        if !Self.isTestMode {
-            let alert = NSAlert()
-            alert.messageText = "Delete this note?"
-            alert.informativeText = "The note is removed from every synced device. This cannot be undone."
-            alert.addButton(withTitle: "Delete")
-            alert.addButton(withTitle: "Cancel")
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-        }
+        guard confirmDelete() else { return }
         model.deleteCurrentNote()
+    }
+
+    /// Sidebar row (Control-click, swipe, or the Delete key): the note need not be the open one.
+    func deleteNote(id: UUID) {
+        guard confirmDelete() else { return }
+        model.deleteNote(id: id)
+    }
+
+    private func confirmDelete() -> Bool {
+        if Self.isTestMode { return true }  // no confirmation dialog in test mode
+        let alert = NSAlert()
+        alert.messageText = "Delete this note?"
+        alert.informativeText = "The note is removed from every synced device. This cannot be undone."
+        alert.addButton(withTitle: "Delete")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// `SILL_TEST_MODE=1` (set by the test scheme): throwaway database, panel never takes key focus.

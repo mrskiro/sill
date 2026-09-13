@@ -20,6 +20,10 @@ final class MacDialer {
     private(set) var connectedPeer: Peer?
     /// Set when a session failed in a way retrying cannot fix (protocol version).
     private(set) var failure: String?
+    /// Set when a pasted code could not pair (this Mac's own code, or refused). It belongs to
+    /// Settings, where the code was pasted — not to the sync warning in the panel's header, which
+    /// would otherwise keep it on screen until a sync that may never come.
+    private(set) var pairingFailure: String?
     /// Tests (and a Mac that cannot browse) dial this instead of looking for the peer over Bonjour.
     var endpointOverride: NWEndpoint?
     /// Session events, after `connectedPeer` has been updated.
@@ -83,11 +87,12 @@ final class MacDialer {
     func pair(with payload: PairingPayload) {
         guard payload.deviceID != store.deviceID else {
             SyncLog.write("mac: refused this Mac's own pairing code")
-            failure = "that code is from this Mac"
+            pairingFailure = "that code is from this Mac"
             return
         }
         SyncLog.write("mac: pairing with \(payload.name) fp=\(SillService.fingerprintPrefix(payload.fingerprint))")
         failure = nil
+        pairingFailure = nil
         pendingPairing = payload
         restart(targets: targets)
     }
@@ -99,6 +104,7 @@ final class MacDialer {
     /// (it dialled us instead, or it was updated and paired again).
     func clearFailure() {
         failure = nil
+        pairingFailure = nil
     }
 
     /// After a local write: start a round if a session is open.
@@ -152,7 +158,7 @@ final class MacDialer {
                 SyncLog.write("mac: dial failed: \(error)")
                 // A code that was refused (expired, or the window was cancelled) is worth saying
                 // out loud: nothing else on screen would explain why nothing happened.
-                if pairing != nil { failure = "pairing rejected" }
+                if pairing != nil { pairingFailure = "pairing rejected" }
             }
             isPairingDial = false
             try? await Task.sleep(for: backoff)
@@ -164,6 +170,7 @@ final class MacDialer {
         switch event {
         case .connected(let peer):
             failure = nil
+            pairingFailure = nil
             connectedPeer = peer
         case .synced(let peer, _):
             connectedPeer = peer

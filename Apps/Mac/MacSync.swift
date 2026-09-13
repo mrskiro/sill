@@ -120,10 +120,15 @@ final class MacSync {
         connections + (dialer.connectedPeer == nil ? 0 : 1)
     }
 
+    /// Why syncing has stopped working, until a later sync settles it — what the header warns about.
+    /// A pasted code that could not pair is not in here; Settings shows that one where it happened.
+    var failure: String? { dialer.failure }
+
     var statusText: String {
         let connected = connectedCount
         if connected > 0 { return connected == 1 ? "1 device connected" : "\(connected) devices connected" }
         if let failure = dialer.failure { return "Sync failed: \(failure)" }
+        if let pairingFailure = dialer.pairingFailure { return "Pairing failed: \(pairingFailure)" }
         if let lastSyncAt { return "Synced \(lastSyncAt.formatted(.relative(presentation: .named)))" }
         if peers.isEmpty { return "Not paired" }
         return "No devices nearby"
