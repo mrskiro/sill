@@ -16,8 +16,8 @@ and drag Sill to Applications. It is signed and notarized, so macOS will not ref
 open it — the first launch still asks once whether to open an app downloaded from the
 internet. Requires macOS 26 or later.
 
-**iPhone** — not on the App Store yet. Build it from source and pair it from the
-Mac's Settings.
+**iPhone** — [Sill Notes on the App Store](https://apps.apple.com/app/sill-notes/id6809280142). Pair it from the
+Mac's Settings, or use it on its own. Requires iOS 26 or later.
 
 ## What it does
 

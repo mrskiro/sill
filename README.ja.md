@@ -16,8 +16,8 @@
 起動を拒否することはありません（初回だけ「インターネットからダウンロードされた
 アプリです」の確認が出ます）。macOS 26 以降が必要です。
 
-**iPhone** — まだ App Store には出していません。ソースからビルドして、Mac の
-Settings からペアリングしてください。
+**iPhone** — [App Store の Sill Notes](https://apps.apple.com/app/sill-notes/id6809280142) から。Mac の Settings から
+ペアリングするか、iPhone 単体でも使えます。iOS 26 以降が必要です。
 
 ## できること
 
