@@ -6,7 +6,7 @@
 # Builds for the simulator (signed, like `make build-ios`: the device identity lives in the keychain
 # access group, so an unsigned build has no sync at all), starts from a clean install, seeds notes through the SILL_AUTOTEST_NOTE
 # launch hook, spreads their dates with sqlite3 so the list shows several sections, then captures the
-# list, the editor and the Sync screen via SILL_AUTOTEST_SCREEN. No taps are needed, so it runs unattended.
+# list, the editor and the Settings sheet (SILL_AUTOTEST_SCREEN=sync) via SILL_AUTOTEST_SCREEN. No taps are needed, so it runs unattended.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -37,7 +37,7 @@ seed $'Call the dentist about the Thursday slot'
 seed $'# Book notes\n\nChapter 3 argues that most planning is really a way of postponing the first step. Keep the first step small enough to do today.'
 seed $'# Ideas for the talk\n\n- Start with the demo, not the slides\n- One example per section, no more\n- End on the sync question people always ask'
 seed $'# Groceries\n\n- [x] Oat milk\n- [x] Coffee beans\n- [ ] Lemons\n- [ ] Bread\n- [ ] Something green'
-seed $'# Tuesday\n\n- [x] Move the sync log link into Help\n- [ ] Ask about the office Wi-Fi\n- [ ] Return the library book\n\nRemember to check the Sync screen after lunch.'
+seed $'# Tuesday\n\n- [x] Move the sync log link into Help\n- [ ] Ask about the office Wi-Fi\n- [ ] Return the library book\n\nRemember to check the sync settings after lunch.'
 xcrun simctl terminate "$DEVICE" "$BUNDLE" 2>/dev/null || true
 
 # Dates: one note per list section. Versions are untouched, only the timestamps move.

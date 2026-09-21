@@ -348,7 +348,7 @@ OSS として見られる品質は、merge モデルの重さではなく次で�
 | 操作 | ↑↓ で選択、Return でエディタへ、⌥⌘S で閉じる。開閉状態は記憶 | ↑↓ Return。閉じたら消える |
 | 向く場面 | 一覧を眺めながら行き来する | 目的のノートが決まっている |
 
-iOS は Apple メモ型（一覧 → エディタ）。起動時は最後のノートを直接開き、戻るで一覧。一覧は Apple メモと同じく Today / Yesterday / Previous 7 Days / Previous 30 Days / 月 / 年でセクション分けし（UI 文言は英語で統一、ロケールに依存しない）、行は太字タイトル + 更新日付 + 本文プレビュー（`NoteListGrouping`、純関数）。
+iOS は Apple メモ型（一覧 → エディタ）。起動時は最後のノートを直接開き、戻るで一覧。一覧は Apple メモと同じく Today / Yesterday / Previous 7 Days / Previous 30 Days / 月 / 年でセクション分けし（UI 文言は英語で統一、ロケールに依存しない）、行は太字タイトル + 更新日付 + 本文プレビュー（`NoteListGrouping`、純関数）。プレビューは読むための表示なので、`MarkdownHighlighting` の marker（`#` `- ` `[ ]` `**` など）を外す。タイトルは export のファイル名に使うので外さない。
 
 ## 13. Project / Module 構成
 
@@ -438,3 +438,4 @@ sill/
 | 16 | Mac のヘッダー | 左に信号機とサイドバー開閉、右に新規作成。文字は出さない。同期状態は Settings に置き、失敗時だけ ⚠︎ を出す |
 | 17 | Mac のアクティベーション | パネルを出す・クリックすると Sill を activate する（`nonactivatingPanel` は使わない）。メニュー（Export など）に届かせるため。Esc / 閉じるで `NSApp.hide` し元のアプリへ戻す |
 | 18 | Mac の削除 | Apple メモと同じくサイドバーの行を Control-クリック / スワイプで Delete、加えて選択行で ⌫。Note ▸ Delete Note は残すがショートカットは付けない（⌘⌫ はメニューがテキストビューより先に拾い、入力中の「行頭まで削除」がノート削除になっていた）。確認ダイアログは据え置き |
+| 19 | iOS の画面 | Mac の 15〜18 番に揃える。一覧の下の同期状態は常時出さず、Mac 側が拒み続けるとき（プロトコル不一致 / `notPaired` / `identityMismatch`）だけタップで Settings を開く帯を出す。再試行で直るもの（切断・タイムアウト）とペアリングの失敗は Settings 内だけ。unpair したら帯は消す。エディタのタイトルは出さない（本文 1 行目の繰り返し）。削除はスワイプ / エディタの More ▸ Delete Note の両方で確認ダイアログを出す（スワイプは destructive role にしない）。キーボードは新規ノートを開いたときだけ上げる（既存ノートは読むために開くことが多い。起動時の最後のノートも上げない）。シートの名前は Settings。一覧の見出し（Notes）は画面に出さないが `navigationTitle` は残す（VoiceOver と戻るボタンの名前になる。`toolbar(removing: .title)` では大見出しが消えないので inline + 空の principal item）。エディタの出口は Share（`ShareLink` + `Transferable`、HTML → Markdown の順で 2 形式）。Copy as Markdown は More メニューに残す |

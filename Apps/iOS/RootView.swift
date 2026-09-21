@@ -9,8 +9,10 @@ struct RootView: View {
         NavigationStack(path: $model.path) {
             NoteListView(model: model)
                 .navigationDestination(for: Destination.self) { destination in
-                    EditorView(draft: model.draft(for: destination))
-                        .onDisappear { model.flush(destination) }
+                    EditorView(draft: model.draft(for: destination)) {
+                        model.deleteNote(in: destination)
+                    }
+                    .onDisappear { model.flush(destination) }
                 }
         }
         .onChange(of: scenePhase, initial: true) { _, phase in
@@ -29,6 +31,7 @@ struct RootView: View {
 
 struct NoteListView: View {
     let model: PhoneModel
+    @State private var pendingDelete: Note?
 
     var body: some View {
         List {
@@ -38,36 +41,54 @@ struct NoteListView: View {
                         NavigationLink(value: Destination.existing(note.id)) {
                             NoteRow(note: note)
                         }
-                    }
-                    .onDelete { offsets in
-                        for index in offsets { model.deleteNote(id: section.notes[index].id) }
+                        // Tinted rather than `role: .destructive`: a destructive swipe starts taking the
+                        // row away before the confirmation, and Cancel would leave it half gone.
+                        .swipeActions(edge: .trailing) {
+                            Button("Delete", systemImage: "trash") { pendingDelete = note }
+                                .tint(.red)
+                        }
                     }
                 }
             }
         }
         .listStyle(.insetGrouped)
+        // Named but not shown: there is only one list, so a heading on screen says nothing. The name
+        // is still what VoiceOver reads for this screen and for the editor's back button.
+        // `.toolbar(removing: .title)` leaves the large title on screen, so the title is made inline
+        // and an empty principal item takes its place in the bar.
         .navigationTitle("Notes")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
                 Button(
-                    "Sync",
+                    "Settings",
                     systemImage: model.sync?.isPaired == true ? "laptopcomputer.and.iphone" : "qrcode.viewfinder"
                 ) {
                     model.showPairing = true
                 }
             }
+            ToolbarItem(placement: .principal) {
+                Color.clear.frame(width: 1, height: 1).accessibilityHidden(true)
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button("New Note", systemImage: "square.and.pencil") { model.newNote() }
             }
         }
+        .deleteNoteConfirmation(for: $pendingDelete) { note in model.deleteNote(id: note.id) }
+        // Sync only speaks up here when it has stopped; the everyday status lives in Settings.
         .safeAreaInset(edge: .bottom) {
-            if let sync = model.sync {
-                Text(sync.status.text)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(.bar)
+            if let failure = model.sync?.failure {
+                Button {
+                    model.showPairing = true
+                } label: {
+                    Label("Sync failed: \(failure)", systemImage: "exclamationmark.triangle")
+                        .font(.caption)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 8)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .background(.bar)
             }
         }
     }
@@ -91,5 +112,25 @@ struct NoteRow: View {
             .foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+    }
+}
+
+extension View {
+    /// The question the Mac asks too: deleting reaches every synced device and cannot be undone.
+    /// `item` is captured when the dialog opens, so the answer always applies to what was asked about.
+    func deleteNoteConfirmation<Item>(for item: Binding<Item?>, onDelete: @escaping (Item) -> Void) -> some View {
+        confirmationDialog(
+            "Delete this note?",
+            isPresented: Binding(
+                get: { item.wrappedValue != nil },
+                set: { if !$0 { item.wrappedValue = nil } }
+            ),
+            titleVisibility: .visible,
+            presenting: item.wrappedValue
+        ) { value in
+            Button("Delete", role: .destructive) { onDelete(value) }
+        } message: { _ in
+            Text("The note is removed from every synced device. This cannot be undone.")
+        }
     }
 }

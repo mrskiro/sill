@@ -1,3 +1,4 @@
+import CoreTransferable
 import SillCore
 import SwiftUI
 import UIKit
@@ -5,19 +6,60 @@ import UniformTypeIdentifiers
 
 struct EditorView: View {
     @Bindable var draft: NoteDraft
+    var onDelete: () -> Void = {}
+    @State private var pendingDelete: UUID?
+
+    private var isBlank: Bool {
+        draft.note == nil && draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// What the share sheet shows above the destinations.
+    private var shareTitle: String {
+        let title = NoteTitle.title(of: draft.text)
+        return title.isEmpty ? "New note" : title
+    }
 
     var body: some View {
-        MarkdownTextView(text: $draft.text, identifier: "editor-\(draft.id.uuidString)")
-            .ignoresSafeArea(.keyboard, edges: .bottom)
-            .navigationTitle(draft.note?.title ?? "")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .primaryAction) {
+        // A saved note is often opened just to read it, so only a new one brings the keyboard up.
+        MarkdownTextView(
+            text: $draft.text, identifier: "editor-\(draft.id.uuidString)", focusOnAppear: draft.note == nil
+        )
+        .ignoresSafeArea(.keyboard, edges: .bottom)
+        // No title: it would only repeat the note's first line, right below it.
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            // The way a note leaves Sill on a phone: the destination is usually another app.
+            ToolbarItem(placement: .primaryAction) {
+                ShareLink(item: SharedNote(markdown: draft.text), preview: SharePreview(shareTitle))
+                    .disabled(isBlank)
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Menu("More", systemImage: "ellipsis") {
                     Button("Copy as Markdown", systemImage: "doc.on.doc") {
                         copy(draft.text)
                     }
+                    Button("Delete Note", systemImage: "trash", role: .destructive) {
+                        pendingDelete = draft.id
+                    }
+                    .disabled(isBlank)
                 }
             }
+        }
+        .deleteNoteConfirmation(for: $pendingDelete) { _ in onDelete() }
+    }
+}
+
+/// What Share hands over: an HTML rendering first, then the Markdown itself. The order is the
+/// preference — somewhere that reads the rich flavour (Slack, Mail, Docs) gets real lists and
+/// emphasis, and everywhere else falls back to the exact characters that were typed.
+struct SharedNote: Transferable {
+    let markdown: String
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .html) { note in
+            Data(MarkdownHTML.fragment(from: note.markdown).utf8)
+        }
+        ProxyRepresentation(exporting: \.markdown)
     }
 }
 
@@ -38,6 +80,7 @@ func copy(_ markdown: String) {
 struct MarkdownTextView: UIViewRepresentable {
     @Binding var text: String
     var identifier: String
+    var focusOnAppear = true
 
     func makeUIView(context: Context) -> UITextView {
         let textView = MarkdownUITextView(usingTextLayoutManager: true)
@@ -64,9 +107,11 @@ struct MarkdownTextView: UIViewRepresentable {
         if textView.text != text {
             textView.text = text
         }
+        // Decided once, on the first pass: a new note that autosaves (or one deleted elsewhere)
+        // must not pull the keyboard up later.
         if !context.coordinator.didFocus {
             context.coordinator.didFocus = true
-            DispatchQueue.main.async { textView.becomeFirstResponder() }
+            if focusOnAppear { DispatchQueue.main.async { textView.becomeFirstResponder() } }
         }
     }
 

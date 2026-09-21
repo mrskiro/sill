@@ -162,6 +162,53 @@ struct PhoneFlowTests {
         #expect(try model.store.note(id: note.id)?.isDeleted == true)
     }
 
+    /// Deleting from the editor: the note is gone for good and the editor closes. Neither the
+    /// pending autosave nor the flush on leaving may write it back.
+    @Test func deletingFromTheEditorRemovesTheNoteAndGoesBack() async throws {
+        let (draft, textView) = try await openNewEditor()
+        textView.insertText("delete me")
+        try await waitUntil { draft.note != nil }
+        let id = try #require(draft.note?.id)
+        textView.insertText(" soon")  // an autosave is pending again
+        let destination = try #require(model.path.last)
+
+        model.deleteNote(in: destination)
+        #expect(!model.path.contains(destination))
+        try await Task.sleep(for: .milliseconds(600))
+        #expect(try model.store.note(id: id)?.isDeleted == true)
+        #expect(try !model.store.liveNotes().contains { $0.content.hasPrefix("delete me") })
+    }
+
+    /// The list shows no heading but keeps its name. UIKit names the editor's back button after the
+    /// item below it, which is what VoiceOver reads for a back button that shows only a chevron.
+    @Test func theEditorsBackButtonIsStillNamedAfterTheList() async throws {
+        _ = try await openNewEditor()
+        try await Task.sleep(for: .milliseconds(500))
+        let backTitles = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .flatMap { $0.allDescendants(of: UINavigationBar.self) }
+            .compactMap { $0.backItem?.title }
+        #expect(backTitles.contains("Notes"), "back item titles: \(backTitles)")
+        model.path = []
+    }
+
+    /// Opening a saved note to read it leaves the keyboard down; a new note brings it up.
+    @Test func onlyANewNoteBringsTheKeyboardUp() async throws {
+        let (_, newTextView) = try await openNewEditor()
+        try await waitUntil { newTextView.isFirstResponder }
+
+        let saved = try model.store.createNote(content: "just reading")
+        model.path = []
+        try await waitUntil { self.allTextViews().isEmpty }
+        model.openNote(id: saved.id)
+        let destination = try #require(model.path.last)
+        let textView = try await editorTextView(for: model.draft(for: destination))
+        try await Task.sleep(for: .milliseconds(300))
+        #expect(!textView.isFirstResponder)
+        model.path = []
+    }
+
     /// Taps the keyboard toolbar the way a finger does: the button's own action, on the real view.
     private func tapFormat(_ label: String, in textView: UITextView) throws {
         let toolbar = try #require(textView.inputAccessoryView)
@@ -245,6 +292,23 @@ struct PhoneFlowTests {
         let html = UIPasteboard.general.data(forPasteboardType: UTType.html.identifier)
             .flatMap { String(data: $0, encoding: .utf8) }
         #expect(html == "<h1>Plan</h1><ul><li>one</li><li><strong>two</strong></li></ul>")
+    }
+
+    /// Share hands over both flavours, HTML first: a target that reads it gets real lists and
+    /// emphasis, and everywhere else falls back to the exact Markdown.
+    @Test func sharingCarriesBothHTMLAndMarkdown() async throws {
+        let markdown = "# Plan\n- one\n- **two**"
+        let note = SharedNote(markdown: markdown)
+        let types = note.exportedContentTypes()
+        #expect(types.first == .html, "types: \(types)")
+        #expect(types.contains { $0.conforms(to: .plainText) }, "types: \(types)")
+
+        let html = try await note.exported(as: .html)
+        #expect(
+            String(data: html, encoding: .utf8)
+                == "<h1>Plan</h1><ul><li>one</li><li><strong>two</strong></li></ul>")
+        let text = try await note.exported(as: .utf8PlainText)
+        #expect(String(data: text, encoding: .utf8) == markdown)
     }
 
     @Test func editorNeverRewritesWhatWasTyped() async throws {

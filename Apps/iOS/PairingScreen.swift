@@ -62,7 +62,7 @@ struct PairingScreen: View {
                     Text(Support.environmentSummary())
                 }
             }
-            .navigationTitle("Sync")
+            .navigationTitle("Settings")
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
             .sheet(isPresented: $showScanner) {
                 QRScannerView { code in

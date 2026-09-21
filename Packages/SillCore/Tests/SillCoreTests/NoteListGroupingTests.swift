@@ -54,6 +54,12 @@ import Testing
         ("Title\n\n  second  \n", "second"),
         ("only title", nil),
         ("", nil),
+        // The preview is read, not edited: Markdown characters are left out of it.
+        ("Groceries\n- milk\n- eggs", "milk"),
+        ("Meeting\nAsk about the **release date**", "Ask about the release date"),
+        ("Plan\n- [ ] send `slides`", "send slides"),
+        ("Plan\n## Details", "Details"),
+        ("Plan\n- \nreal text", "real text"),
     ])
     func previewIsTheLineAfterTheTitle(content: String, expected: String?) {
         #expect(NoteTitle.preview(of: content) == expected)

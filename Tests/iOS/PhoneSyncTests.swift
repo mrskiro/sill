@@ -48,10 +48,60 @@ extension PhoneFlowTests {
             try await waitUntil { if case .failed = sync.status { return true } else { return false } }
             #expect(sync.status.text.contains("older version of Sill"))
             #expect(sync.status.text.contains("Update Sill there"))
+            // This one does not go away by retrying, so the note list warns about it.
+            #expect(sync.failure != nil)
             // The pairing survived the refusal, so the phone still knows what to dial next time.
             #expect(sync.peers.map(\.name) == ["Old Mac"])
 
             await sync.client.useHelloProtocolVersion(SyncMessage.protocolVersion)
+            sync.stop()
+            listenerTask.cancel()
+            _ = try? await listenerTask.value
+            sync.unpair(macStore.deviceID)
+            sync.stop()
+            sync.endpointOverride = nil
+            #expect(sync.status == .unpaired)
+            #expect(sync.failure == nil)
+        }
+
+        /// The list warns about a Mac that keeps refusing this phone, and stays quiet about
+        /// everything a retry can settle.
+        @Test func onlyARefusalFromTheMacReachesTheNoteList() {
+            #expect(PhoneSync.listWarning(for: SyncError.identityMismatch) != nil)
+            #expect(PhoneSync.listWarning(for: SyncError.notPaired) != nil)
+            #expect(PhoneSync.listWarning(for: SyncError.protocolVersion(SyncMessage.protocolVersion + 1)) != nil)
+            #expect(PhoneSync.listWarning(for: SyncError.closed) == nil)
+            #expect(PhoneSync.listWarning(for: SyncError.pairingRejected) == nil)
+            #expect(PhoneSync.listWarning(for: URLError(.timedOut)) == nil)
+        }
+
+        /// A refused code (the Mac closed its pairing window) is said in Settings, where the code
+        /// was entered. The note list must not keep a sync warning for it.
+        @Test func aRefusedCodeIsNotASyncFailure() async throws {
+            let sync = try #require(model.sync)
+            let macStore = try NoteStore(database: try AppDatabase.inMemory(), deviceName: "Mac")
+            let macIdentityStore = IdentityStore(label: "com.mrskiro.sill.test-mac.\(UUID().uuidString)")
+            defer { try? macIdentityStore.delete() }
+            let macIdentity = try macIdentityStore.loadOrCreate(deviceID: macStore.deviceID)
+            let server = SyncServer(store: macStore)
+            let (ports, portSink) = AsyncStream<UInt16>.makeStream()
+            let listenerTask = Task {
+                try await SillListener(identity: macIdentity, server: server, advertise: false).run {
+                    portSink.yield($0)
+                }
+            }
+            var portIterator = ports.makeAsyncIterator()
+            let port = try #require(await portIterator.next())
+            sync.endpointOverride = .hostPort(host: "127.0.0.1", port: NWEndpoint.Port(rawValue: port)!)
+
+            let token = await server.beginPairing()
+            await server.endPairing()
+            sync.pair(
+                with: PairingPayload(
+                    deviceID: macStore.deviceID, name: "Mac", fingerprint: macIdentity.fingerprint, token: token))
+            try await waitUntil { sync.status == .failed("pairing rejected") }
+            #expect(sync.failure == nil)
+
             sync.stop()
             listenerTask.cancel()
             _ = try? await listenerTask.value
