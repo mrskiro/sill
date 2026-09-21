@@ -62,13 +62,29 @@ public enum NoteListGrouping {
 }
 
 extension NoteTitle {
-    /// The first non-blank line after the title line, for list previews. Nil when there is none.
+    /// The first line after the title line that still has text once its Markdown characters are
+    /// left out, for list previews. Nil when there is none. A preview is only read, never edited,
+    /// so `#`, `- `, `[ ]` and `**` would only get in the way there. The title keeps them: export
+    /// names files after it.
     public static func preview(of content: String) -> String? {
-        var lines = content.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
-        guard !lines.isEmpty else { return nil }
-        lines.removeFirst()
-        return lines.first
+        let lines = content.split(omittingEmptySubsequences: false, whereSeparator: \.isNewline)
+        guard let titleIndex = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty })
+        else { return nil }
+        for line in lines[(titleIndex + 1)...] {
+            let text = plainText(of: String(line)).trimmingCharacters(in: .whitespaces)
+            if !text.isEmpty { return text }
+        }
+        return nil
+    }
+
+    /// One line without the characters `MarkdownHighlighting` marks as Markdown syntax, so the
+    /// preview and the editor agree on what counts.
+    static func plainText(of line: String) -> String {
+        let text = NSMutableString(string: line)
+        // Back to front, so the ranges still ahead stay valid.
+        for span in MarkdownHighlighting.spans(in: line).reversed() where span.style == .marker {
+            text.deleteCharacters(in: span.range)
+        }
+        return text as String
     }
 }

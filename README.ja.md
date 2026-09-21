@@ -34,7 +34,7 @@ Mac のキー: **⌥S** 表示/非表示（Settings で変更可）、**Esc** �
 **⌘⇧C** Markdown としてコピー、**⌥⌘S** サイドバー、サイドバーで **⌫** ノートを削除、
 **Return / Tab / ⇧Tab / ⌘Return** でリスト操作。
 
-ペアリングは Mac の Settings（⌘,）→ **Pair a Device…** から。iPhone とは Sync 画面で
+ペアリングは Mac の Settings（⌘,）→ **Pair a Device…** から。iPhone とは Settings 画面で
 QR コードを読み取り、Mac 同士は **Copy Code** で写して相手の Settings に貼ります。
 
 ## ビルド

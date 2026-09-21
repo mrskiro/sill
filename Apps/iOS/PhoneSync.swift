@@ -35,6 +35,10 @@ final class PhoneSync {
     }
     private(set) var peers: [Peer] = []
     private(set) var lastSyncAt: Date?
+    /// Why syncing has stopped for good (the Mac is on another protocol version), until a session
+    /// connects again — what the note list warns about. Retried errors clear themselves, and a
+    /// refused pairing code belongs to Settings, where the code was entered; neither is in here.
+    private(set) var failure: String?
     /// Tests (and a device without Bonjour) dial this instead of browsing.
     var endpointOverride: NWEndpoint?
 
@@ -78,6 +82,7 @@ final class PhoneSync {
     func unpair(_ id: DeviceID) {
         try? store.removePeer(id: id)
         refreshPeers()
+        if peers.isEmpty { failure = nil }  // nothing left that could be failing
         stop()
         status = peers.isEmpty ? .unpaired : .searching
         start()
@@ -131,6 +136,7 @@ final class PhoneSync {
                 // is missing from the unpair list and the next foreground has nothing to dial.
                 refreshPeers()
                 status = .failed(error.localizedDescription)
+                failure = error.localizedDescription
                 return
             } catch {
                 log.error("session failed: \(error)")
@@ -147,6 +153,7 @@ final class PhoneSync {
     private func handle(_ event: SyncClient.SessionEvent) {
         switch event {
         case .connected(let peer):
+            failure = nil
             status = .connected(peer.name)
             refreshPeers()
         case .synced(let peer, _):

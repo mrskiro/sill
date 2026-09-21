@@ -122,6 +122,17 @@ final class PhoneModel {
         }
     }
 
+    /// The editor's Delete: tombstones the note if it was ever saved, then goes back to the list.
+    /// The draft is emptied first. A pending autosave, or the flush when the editor leaves the
+    /// stack, would otherwise write the text back — and `saveEdit` on a deleted note revives it.
+    func deleteNote(in destination: Destination) {
+        let draft = draft(for: destination)
+        let id = draft.note?.id
+        draft.discard()
+        if let id { deleteNote(id: id) }
+        path.removeAll { $0 == destination }
+    }
+
     /// The editor session for a destination; created on first use, kept while it is on the stack.
     func draft(for destination: Destination) -> NoteDraft {
         if let draft = drafts[destination] { return draft }
@@ -185,6 +196,14 @@ final class NoteDraft: Identifiable {
             note = nil
             text = ""
         }
+    }
+
+    /// Forgets the note and its text without saving either (the note is being deleted).
+    func discard() {
+        note = nil
+        text = ""  // schedules a save of nothing; cancelled straight away
+        saveTask?.cancel()
+        saveTask = nil
     }
 
     func flush() {

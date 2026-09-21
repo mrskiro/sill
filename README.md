@@ -35,7 +35,7 @@ Mac keys: **⌥S** show/hide (configurable), **Esc** close, **⌘N** new note,
 **Return / Tab / ⇧Tab / ⌘Return** for lists.
 
 To pair, open Settings (⌘,) on the Mac and choose **Pair a Device…**. From an
-iPhone, scan the QR code on its Sync screen; from another Mac, use **Copy Code**
+iPhone, scan the QR code in its Settings; from another Mac, use **Copy Code**
 and paste it into that Mac's Settings.
 
 ## Build
