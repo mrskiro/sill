@@ -64,6 +64,17 @@ extension PhoneFlowTests {
             #expect(sync.failure == nil)
         }
 
+        /// The list warns about a Mac that keeps refusing this phone, and stays quiet about
+        /// everything a retry can settle.
+        @Test func onlyARefusalFromTheMacReachesTheNoteList() {
+            #expect(PhoneSync.listWarning(for: SyncError.identityMismatch) != nil)
+            #expect(PhoneSync.listWarning(for: SyncError.notPaired) != nil)
+            #expect(PhoneSync.listWarning(for: SyncError.protocolVersion(SyncMessage.protocolVersion + 1)) != nil)
+            #expect(PhoneSync.listWarning(for: SyncError.closed) == nil)
+            #expect(PhoneSync.listWarning(for: SyncError.pairingRejected) == nil)
+            #expect(PhoneSync.listWarning(for: URLError(.timedOut)) == nil)
+        }
+
         /// A refused code (the Mac closed its pairing window) is said in Settings, where the code
         /// was entered. The note list must not keep a sync warning for it.
         @Test func aRefusedCodeIsNotASyncFailure() async throws {

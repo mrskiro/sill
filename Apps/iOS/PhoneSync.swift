@@ -72,7 +72,18 @@ final class PhoneSync {
         loopTask = nil
     }
 
+    /// What the note list warns about: a Mac that will keep refusing this phone until someone
+    /// acts on it. A connection that dropped clears itself on the next retry, and a refused
+    /// pairing code belongs to Settings, where the code was entered.
+    static func listWarning(for error: Error) -> String? {
+        switch error as? SyncError {
+        case .protocolVersion, .notPaired, .identityMismatch: error.localizedDescription
+        default: nil
+        }
+    }
+
     func pair(with payload: PairingPayload) {
+        failure = nil
         SyncLog.write("phone: pairing with \(payload.name) fp=\(SillService.fingerprintPrefix(payload.fingerprint))")
         pendingPairing = payload
         stop()
@@ -82,7 +93,7 @@ final class PhoneSync {
     func unpair(_ id: DeviceID) {
         try? store.removePeer(id: id)
         refreshPeers()
-        if peers.isEmpty { failure = nil }  // nothing left that could be failing
+        failure = nil  // whatever was failing, this is no longer the device it was about
         stop()
         status = peers.isEmpty ? .unpaired : .searching
         start()
@@ -141,6 +152,9 @@ final class PhoneSync {
             } catch {
                 log.error("session failed: \(error)")
                 status = .failed(pairing == nil ? error.localizedDescription : "pairing rejected")
+                // Retrying will not talk the Mac round when it is the one refusing, so say it on
+                // the list rather than leaving the phone quietly out of sync.
+                if pairing == nil { failure = Self.listWarning(for: error) }
                 refreshPeers()
                 if peers.isEmpty { return }
             }
