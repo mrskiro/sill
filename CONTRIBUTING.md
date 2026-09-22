@@ -74,9 +74,9 @@ A few conventions worth knowing:
 
 `docs/design.md` is the architecture and, more usefully, the record of what was decided
 and why: the sync model, the pairing scheme, the merge rules, and the things
-deliberately left out. `docs/app-store.md` holds what goes into App Store Connect for
-the iPhone app. `CLAUDE.md` is a short working guide with the traps this codebase has
-already hit.
+deliberately left out. `metadata/` holds the App Store copy for the iPhone app.
+`CLAUDE.md` is a short working guide with the traps this codebase has already hit, and
+the release steps.
 
 CI (`.github/workflows/ci.yml`) runs the lint, `swift test` and a build of both apps on
 a macOS runner, with signing disabled. The hosted tests need a signing identity, so
@@ -85,6 +85,5 @@ they stay local — `make test` itself runs on your Mac and a simulator, not a p
 Pushing a `vX.Y.Z` tag runs two release jobs. The macOS one signs with a Developer ID,
 notarizes both the app and the disk image, staples both, verifies the result and
 attaches it to a GitHub release. The iOS one archives with Apple Distribution and
-uploads to App Store Connect, where the build shows up in TestFlight; releasing it to
-the store stays a manual step there. Each job needs its own secrets, so a fork without
-them cannot cut a release.
+uploads to App Store Connect; submitting it for review is done by the maintainer.
+Each job needs its own secrets, so a fork without them cannot cut a release.

@@ -22,7 +22,13 @@
 
 ## リリース
 
-- `vX.Y.Z` タグを push すると `.github/workflows/release.yml` が Developer ID 署名 + 公証済みの dmg を Release に添付する。
+- リリースはメンテナだけが行う。手順は次のとおり（App ID は `6809280142`、`asc` はローカルの認証で動く）。
+  1. `metadata/version/X.Y.Z/en-US.json` に What's New と説明文を書き、PR で main に入れる。
+  2. main に `vX.Y.Z` タグを push する。`.github/workflows/release.yml` が、Mac は Developer ID 署名と公証を済ませた dmg を Release に添付し、iOS は App Store Connect にアップロードする（ビルド番号は実行番号）。
+  3. `asc versions create --app 6809280142 --version X.Y.Z --platform IOS --copyright "<年> mrskiro" --release-type AFTER_APPROVAL --copy-metadata-from <前の版>`
+  4. `asc metadata apply --app 6809280142 --version X.Y.Z --platform IOS --dir ./metadata`（先に `--dry-run` で差分を見る）
+  5. `asc builds list --app 6809280142 --limit 1` でビルドが `VALID` になるのを待ち、`asc versions attach-build --version-id <版> --build-id <ビルド>`
+  6. `asc validate --app 6809280142 --version X.Y.Z --check-urls` がエラー 0 件なら `asc review submit --app 6809280142 --version X.Y.Z --build-id <ビルド> --confirm`。承認されると自動で公開される。
 - export は**手動署名**。cloud signing は Developer ID の provisioning profile を発行できない（Admin の API キーでも `Cloud signing permission error`）。profile が要るのは `keychain-access-groups` が `application-identifier` を要求するためで、普通の Developer ID アプリはここを踏まない。profile は secret から復元し、UUID はファイル自身から読む。
 - アプリと dmg の**両方**を公証して staple する。dmg だけだと、そこから取り出したアプリはチケットを持たず、オフラインで初回起動できない。
 - 配布を zip にしない。`~/Downloads` に置いたまま開くと App Translocation でランダムな読み取り専用パスから動く。dmg の `/Applications` リンクへのドラッグが quarantine を外す。
