@@ -202,10 +202,14 @@ jobs:
 
       - name: Check the App Store copy for this version exists
         run: |
-          # The version's What's New is written by hand; stop before building rather than
-          # submitting a release whose store page still describes the previous one.
-          COPY="metadata/version/${GITHUB_REF_NAME#v}/en-US.json"
-          [ -f "$COPY" ] || { echo "$COPY is missing"; exit 1; }
+          # The version's What's New is written by hand, once per store language; stop before
+          # building rather than submitting a release whose store page still describes the
+          # previous one. A new version starts as a copy of the last, so a missing language would
+          # not fail later, it would ship the old text.
+          for LOCALE in metadata/app-info/*.json; do
+            COPY="metadata/version/${GITHUB_REF_NAME#v}/$(basename "$LOCALE")"
+            [ -f "$COPY" ] || { echo "$COPY is missing"; exit 1; }
+          done
 
       - name: Select the newest Xcode 26
         run: |
@@ -323,7 +327,11 @@ jobs:
             asc versions create --app 6809280142 --platform IOS --version "$VERSION" \
               --copyright "$(date +%Y) mrskiro" --release-type AFTER_APPROVAL
           fi
-          # Upload, wait for processing, apply metadata/version/$VERSION, attach the build, submit.
-          # AFTER_APPROVAL puts the build on sale as soon as App Review passes it.
+          # Applies metadata/app-info (name, subtitle) as well as this version's copy, which
+          # publish --metadata-dir would limit to the latter.
+          asc metadata apply --app 6809280142 --platform IOS --version "$VERSION" \
+            --dir ./metadata --include localizations --output table
+          # Upload, wait for processing, attach the build, submit. AFTER_APPROVAL puts the build on
+          # sale as soon as App Review passes it.
           asc publish appstore --app 6809280142 --ipa "$IPA" --version "$VERSION" \
-            --metadata-dir ./metadata --wait --submit --confirm --output table
+            --wait --submit --confirm --output table
