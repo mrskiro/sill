@@ -2,9 +2,10 @@
 #
 # Not exercised until these repository secrets exist (Settings › Secrets and variables › Actions):
 #   APPLE_TEAM_ID                 e.g. ABCDE12345
-#   ASC_KEY_ID / ASC_ISSUER_ID    App Store Connect API key, used only to notarize, so the
-#                                 Developer role is enough. Signing does not touch Apple's servers:
-#                                 the Release config signs manually against the profile below.
+#   ASC_KEY_ID / ASC_ISSUER_ID    App Store Connect API key. It notarizes the Mac app and submits the
+#                                 iPhone app for review, and submitting needs the App Manager role.
+#                                 Signing does not touch Apple's servers: the Release config signs
+#                                 manually against the profile below.
 #   ASC_API_KEY_P8                the .p8 contents, base64-encoded
 #   MACOS_CERTIFICATE_P12         "Developer ID Application" certificate + key, .p12 base64-encoded
 #   MACOS_PROVISION_PROFILE       the "Developer ID" .provisionprofile, base64-encoded. Made once in
@@ -13,7 +14,8 @@
 #                                 application-identifier, which only a profile can grant.
 #   MACOS_CERTIFICATE_PASSWORD    password of that .p12
 #
-# The iOS job uploads the same tag to App Store Connect (TestFlight, then the App Store) and needs:
+# The iOS job uploads the same tag to App Store Connect and submits it for review with the copy in
+# metadata/version/X.Y.Z/; an approved build goes on sale by itself. It needs:
 #   IOS_CERTIFICATE_P12           "Apple Distribution" certificate + key, .p12 base64-encoded
 #   IOS_CERTIFICATE_PASSWORD      password of that .p12
 #   IOS_PROVISION_PROFILE         the "App Store" .mobileprovision for com.mrskiro.sill, base64-encoded.
@@ -191,11 +193,19 @@ jobs:
             --title "Sill $GITHUB_REF_NAME" --generate-notes
 
   ios:
-    name: iOS (App Store Connect upload)
+    name: iOS (App Store submission)
     runs-on: macos-26
-    timeout-minutes: 60
+    # Room for Apple's build processing, which the submit step waits out.
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check the App Store copy for this version exists
+        run: |
+          # The version's What's New is written by hand; stop before building rather than
+          # submitting a release whose store page still describes the previous one.
+          COPY="metadata/version/${GITHUB_REF_NAME#v}/en-US.json"
+          [ -f "$COPY" ] || { echo "$COPY is missing"; exit 1; }
 
       - name: Select the newest Xcode 26
         run: |
@@ -270,18 +280,16 @@ jobs:
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" MARKETING_VERSION="$VERSION" CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER" \
             archive
 
-      - name: Upload to App Store Connect
+      - name: Export the ipa
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
-          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
         run: |
           cat > "$RUNNER_TEMP/export-ios.plist" <<PLIST
           <?xml version="1.0" encoding="UTF-8"?>
           <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
           <plist version="1.0"><dict>
             <key>method</key><string>app-store-connect</string>
-            <key>destination</key><string>upload</string>
+            <key>destination</key><string>export</string>
             <key>teamID</key><string>$APPLE_TEAM_ID</string>
             <key>signingStyle</key><string>manual</string>
             <key>signingCertificate</key><string>Apple Distribution</string>
@@ -292,12 +300,30 @@ jobs:
             <key>manageAppVersionAndBuildNumber</key><false/>
           </dict></plist>
           PLIST
-          # The API key here is for the upload itself, not for signing: the archive is already
-          # signed against the installed profile. The build shows up in TestFlight once Apple has
-          # processed it; releasing it to the App Store is a manual step in App Store Connect.
+          # Written to disk rather than uploaded here: asc uploads it below, so the build it waits
+          # for and submits is the one this run made.
           xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/SillPhone.xcarchive" \
-            -exportOptionsPlist "$RUNNER_TEMP/export-ios.plist" -exportPath "$RUNNER_TEMP/export-ios" \
-            -allowProvisioningUpdates \
-            -authenticationKeyPath "$RUNNER_TEMP/asc/AuthKey.p8" \
-            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID" -quiet
-          echo "uploaded Sill ${GITHUB_REF_NAME#v} ($GITHUB_RUN_NUMBER) to App Store Connect"
+            -exportOptionsPlist "$RUNNER_TEMP/export-ios.plist" -exportPath "$RUNNER_TEMP/export-ios" -quiet
+          IPA=$(find "$RUNNER_TEMP/export-ios" -maxdepth 1 -name '*.ipa' | head -1)
+          [ -n "$IPA" ] || { echo "export produced no .ipa"; exit 1; }
+          echo "IPA=$IPA" >> "$GITHUB_ENV"
+
+      - name: Upload and submit for review
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_BYPASS_KEYCHAIN: '1'
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          export ASC_PRIVATE_KEY_PATH="$RUNNER_TEMP/asc/AuthKey.p8"
+          brew install asc
+          # publish would create the version too, but without a copyright line or a release type.
+          # Creating it first sets both; publish then finds it and fills it in.
+          if [ "$(asc versions list --app 6809280142 --platform IOS --version "$VERSION" --output json | jq '.data | length')" = 0 ]; then
+            asc versions create --app 6809280142 --platform IOS --version "$VERSION" \
+              --copyright "$(date +%Y) mrskiro" --release-type AFTER_APPROVAL
+          fi
+          # Upload, wait for processing, apply metadata/version/$VERSION, attach the build, submit.
+          # AFTER_APPROVAL puts the build on sale as soon as App Review passes it.
+          asc publish appstore --app 6809280142 --ipa "$IPA" --version "$VERSION" \
+            --metadata-dir ./metadata --wait --submit --confirm --output table
