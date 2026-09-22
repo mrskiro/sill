@@ -9,8 +9,14 @@ struct EditorView: View {
     var onDelete: () -> Void = {}
     @State private var pendingDelete: UUID?
 
+    /// Nothing to delete: a new note that was never saved.
     private var isBlank: Bool {
-        draft.note == nil && draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        draft.note == nil && hasNoText
+    }
+
+    /// Nothing to share, even when the note itself still exists.
+    private var hasNoText: Bool {
+        draft.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     /// What the share sheet shows above the destinations.
@@ -31,7 +37,7 @@ struct EditorView: View {
             // The way a note leaves Sill on a phone: the destination is usually another app.
             ToolbarItem(placement: .primaryAction) {
                 ShareLink(item: SharedNote(markdown: draft.text), preview: SharePreview(shareTitle))
-                    .disabled(isBlank)
+                    .disabled(hasNoText)
             }
             ToolbarItem(placement: .primaryAction) {
                 Menu("More", systemImage: "ellipsis") {

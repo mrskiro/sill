@@ -147,14 +147,16 @@ final class PhoneSync {
                 // is missing from the unpair list and the next foreground has nothing to dial.
                 refreshPeers()
                 status = .failed(error.localizedDescription)
-                failure = error.localizedDescription
+                failure = Self.listWarning(for: error)
                 return
             } catch {
                 log.error("session failed: \(error)")
                 status = .failed(pairing == nil ? error.localizedDescription : "pairing rejected")
                 // Retrying will not talk the Mac round when it is the one refusing, so say it on
-                // the list rather than leaving the phone quietly out of sync.
-                if pairing == nil { failure = Self.listWarning(for: error) }
+                // the list rather than leaving the phone quietly out of sync. A retry that fails
+                // some other way (the Mac's lid is shut) leaves a standing warning alone: it is
+                // still being refused, and only connecting again settles it.
+                if pairing == nil, let warning = Self.listWarning(for: error) { failure = warning }
                 refreshPeers()
                 if peers.isEmpty { return }
             }

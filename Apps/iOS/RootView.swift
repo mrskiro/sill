@@ -53,7 +53,7 @@ struct NoteListView: View {
         }
         .listStyle(.insetGrouped)
         // Named but not shown: there is only one list, so a heading on screen says nothing. The name
-        // is still what VoiceOver reads for this screen and for the editor's back button.
+        // is what UIKit gives the editor's back button, which is a chevron with nothing written on it.
         // `.toolbar(removing: .title)` leaves the large title on screen, so the title is made inline
         // and an empty principal item takes its place in the bar.
         .navigationTitle("Notes")
